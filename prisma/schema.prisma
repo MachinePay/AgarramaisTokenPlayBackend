@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum StoreStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MachineStatus {
+  AVAILABLE
+  BUSY
+  MAINTENANCE
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  FAILED
+}
+
+enum GameplayStatus {
+  SUCCESS
+  FAILED
+}
+
+enum LoyaltyLevelStatus {
+  ACTIVE
+  DRAFT
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  cpf          String     @unique
+  passwordHash String     @map("password_hash")
+  status       UserStatus @default(ACTIVE)
+  role         UserRole   @default(CUSTOMER)
+
+  creditBalance         Int @default(0) @map("credit_balance")
+  totalCreditsPurchased Int @default(0) @map("total_credits_purchased")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  transactions Transaction[]
+  gameplayLogs GameplayLog[]
+
+  @@map("users")
+}
+
+model Store {
+  id       String      @id @default(uuid())
+  name     String
+  location String
+  status   StoreStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  machines Machine[]
+
+  @@map("stores")
+}
+
+model Machine {
+  id          String        @id @default(uuid())
+  storeId     String        @map("store_id")
+  name        String
+  imageUrl    String?       @map("image_url")
+  telemetryId String        @unique @map("telemetry_id")
+  status      MachineStatus @default(AVAILABLE)
+
+  costPerGame     Int @map("cost_per_game")
+  pulsesPerCredit Int @map("pulses_per_credit")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  store        Store         @relation(fields: [storeId], references: [id])
+  gameplayLogs GameplayLog[]
+
+  @@index([storeId])
+  @@map("machines")
+}
+
+model LoyaltyLevel {
+  id                 String             @id @default(uuid())
+  levelName          String             @map("level_name")
+  requiredCredits    Int                @map("required_credits")
+  bonusCreditsReward Int                @default(0) @map("bonus_credits_reward")
+  status             LoyaltyLevelStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([requiredCredits])
+  @@map("loyalty_levels")
+}
+
+model CreditPackage {
+  id           String  @id @default(uuid())
+  name         String
+  amountBrl    Decimal @map("amount_brl") @db.Decimal(10, 2)
+  baseCredits  Int     @map("base_credits")
+  bonusCredits Int     @default(0) @map("bonus_credits")
+  isPopular    Boolean @default(false) @map("is_popular")
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  transactions Transaction[]
+
+  @@unique([name])
+  @@map("credit_packages")
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  userId         String            @map("user_id")
+  packageId      String?           @map("package_id")
+  amountBrl      Decimal           @map("amount_brl") @db.Decimal(10, 2)
+  creditsAwarded Int               @map("credits_awarded")
+  status         TransactionStatus @default(PENDING)
+
+  // Checkout Pro do Mercado Pago: o usuario paga com cartao OU Pix na pagina
+  // hospedada por eles (checkoutUrl), sem a gente lidar com dados de cartao.
+  checkoutUrl    String? @map("checkout_url")
+  mpPreferenceId String? @map("mp_preference_id")
+  mpPaymentId    String? @map("mp_payment_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User           @relation(fields: [userId], references: [id])
+  package CreditPackage? @relation(fields: [packageId], references: [id])
+
+  @@index([userId])
+  @@map("transactions")
+}
+
+model GameplayLog {
+  id             String         @id @default(uuid())
+  userId         String         @map("user_id")
+  machineId      String         @map("machine_id")
+  creditsDebited Int            @map("credits_debited")
+  pulsesSent     Int            @map("pulses_sent")
+  status         GameplayStatus
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  machine Machine @relation(fields: [machineId], references: [id])
+
+  @@index([userId])
+  @@index([machineId])
+  @@map("gameplay_logs")
+}

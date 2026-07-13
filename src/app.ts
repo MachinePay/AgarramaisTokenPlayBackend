@@ -1,0 +1,51 @@
+import cors from "@fastify/cors";
+import Fastify from "fastify";
+import { ZodError } from "zod";
+import authPlugin from "./plugins/auth";
+import { HttpError } from "./utils/http-error";
+import { authRoutes } from "./modules/auth/auth.routes";
+import { usersRoutes } from "./modules/users/users.routes";
+import { storesRoutes } from "./modules/stores/stores.routes";
+import { gameplayRoutes } from "./modules/gameplay/gameplay.routes";
+import { loyaltyAdminRoutes } from "./modules/loyalty/loyalty.routes";
+import { packagesRoutes } from "./modules/packages/packages.routes";
+import { transactionsRoutes } from "./modules/transactions/transactions.routes";
+import { machinesAdminRoutes } from "./modules/machines/machines.admin.routes";
+import { dashboardAdminRoutes } from "./modules/admin/dashboard.routes";
+
+export function buildApp() {
+  const app = Fastify({ logger: true });
+
+  app.register(cors, { origin: true });
+  app.register(authPlugin);
+
+  app.register(authRoutes);
+  app.register(usersRoutes);
+  app.register(storesRoutes);
+  app.register(gameplayRoutes);
+  app.register(loyaltyAdminRoutes);
+  app.register(packagesRoutes);
+  app.register(transactionsRoutes);
+  app.register(machinesAdminRoutes);
+  app.register(dashboardAdminRoutes);
+
+  app.get("/health", async () => ({ status: "ok" }));
+
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.status(422).send({
+        message: "Dados invalidos",
+        issues: error.issues,
+      });
+    }
+
+    if (error instanceof HttpError) {
+      return reply.status(error.statusCode).send({ message: error.message });
+    }
+
+    app.log.error(error);
+    return reply.status(500).send({ message: "Erro interno no servidor" });
+  });
+
+  return app;
+}

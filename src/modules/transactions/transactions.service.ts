@@ -1,0 +1,172 @@
+import type { Prisma, Transaction } from "@prisma/client";
+import { prisma } from "../../utils/prisma";
+import { BadRequestError, ConflictError, NotFoundError } from "../../utils/http-error";
+import { mercadoPagoGateway } from "../../integrations/mercadopago";
+import { applyLevelUpBonuses, type LevelUpResult } from "../loyalty/loyalty.service";
+
+type TransactionClient = Prisma.TransactionClient;
+
+/**
+ * Cria a Transaction PENDING e a preference no Checkout Pro do Mercado Pago.
+ * O frontend deve redirecionar o usuario para `checkoutUrl`: la ele escolhe
+ * entre cartao (com parcelamento) ou Pix na propria pagina do Mercado Pago.
+ */
+export async function checkoutPackage(userId: string, packageId: string): Promise<Transaction> {
+  const [user, creditPackage] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.creditPackage.findUnique({ where: { id: packageId } }),
+  ]);
+
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+  if (!creditPackage || !creditPackage.active) {
+    throw new NotFoundError("Pacote de creditos nao encontrado");
+  }
+
+  const amountBrl = Number(creditPackage.amountBrl);
+  const creditsAwarded = creditPackage.baseCredits + creditPackage.bonusCredits;
+
+  const transaction = await prisma.transaction.create({
+    data: { userId, packageId, amountBrl, creditsAwarded },
+  });
+
+  const preference = await mercadoPagoGateway.createPreference({
+    title: `Agarra Mais - Pacote ${creditPackage.name}`,
+    amountBrl,
+    externalReference: transaction.id,
+    payerEmail: user.email,
+    payerName: user.name,
+  });
+
+  return prisma.transaction.update({
+    where: { id: transaction.id },
+    data: {
+      checkoutUrl: preference.checkoutUrl,
+      mpPreferenceId: preference.preferenceId,
+    },
+  });
+}
+
+export type ConfirmTransactionResult = {
+  transactionId: string;
+  status: "APPROVED" | "FAILED";
+  creditsAwarded: number;
+  levelUp: LevelUpResult;
+};
+
+async function approveTransaction(
+  tx: TransactionClient,
+  transaction: Transaction,
+  mpPaymentId?: string,
+): Promise<ConfirmTransactionResult> {
+  const user = await tx.user.findUniqueOrThrow({ where: { id: transaction.userId } });
+  const previousTotal = user.totalCreditsPurchased;
+  const newTotal = previousTotal + transaction.creditsAwarded;
+
+  await tx.user.update({
+    where: { id: transaction.userId },
+    data: {
+      creditBalance: { increment: transaction.creditsAwarded },
+      totalCreditsPurchased: { increment: transaction.creditsAwarded },
+    },
+  });
+
+  const levelUp = await applyLevelUpBonuses(tx, transaction.userId, previousTotal, newTotal);
+
+  await tx.transaction.update({
+    where: { id: transaction.id },
+    data: { status: "APPROVED", mpPaymentId },
+  });
+
+  return {
+    transactionId: transaction.id,
+    status: "APPROVED",
+    creditsAwarded: transaction.creditsAwarded,
+    levelUp,
+  };
+}
+
+/**
+ * Confirmacao manual (admin/testes): usada em ambiente sem Mercado Pago real
+ * conectado (MP_MOCK=true), ja que nesse modo nenhum webhook chega de verdade.
+ */
+export async function confirmTransaction(transactionId: string): Promise<ConfirmTransactionResult> {
+  return prisma.$transaction(async (tx) => {
+    const transaction = await tx.transaction.findUnique({ where: { id: transactionId } });
+    if (!transaction) {
+      throw new NotFoundError("Transacao nao encontrada");
+    }
+    if (transaction.status !== "PENDING") {
+      throw new ConflictError("Transacao ja foi processada");
+    }
+
+    return approveTransaction(tx, transaction);
+  });
+}
+
+export async function failTransaction(transactionId: string): Promise<ConfirmTransactionResult> {
+  const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  if (!transaction) {
+    throw new NotFoundError("Transacao nao encontrada");
+  }
+  if (transaction.status !== "PENDING") {
+    throw new BadRequestError("Transacao ja foi processada");
+  }
+
+  await prisma.transaction.update({ where: { id: transactionId }, data: { status: "FAILED" } });
+
+  return {
+    transactionId,
+    status: "FAILED",
+    creditsAwarded: 0,
+    levelUp: { bonusCreditsGranted: 0, levelsReached: [] },
+  };
+}
+
+/**
+ * Chamada pelo webhook do Mercado Pago (ver transactions.routes.ts). Nunca
+ * confia no corpo da notificacao: sempre busca o pagamento de volta na API
+ * deles antes de creditar - so o `paymentId` do webhook e usado, e so para
+ * saber QUAL pagamento consultar.
+ */
+export async function handleMercadoPagoPaymentUpdate(paymentId: string): Promise<void> {
+  const payment = await mercadoPagoGateway.getPayment(paymentId);
+  if (!payment || !payment.externalReference) return;
+
+  const transaction = await prisma.transaction.findUnique({
+    where: { id: payment.externalReference },
+  });
+  if (!transaction || transaction.status !== "PENDING") return;
+
+  if (payment.status === "approved") {
+    await prisma.$transaction(async (tx) => {
+      const locked = await tx.transaction.findUnique({ where: { id: transaction.id } });
+      if (!locked || locked.status !== "PENDING") return;
+      await approveTransaction(tx, locked, payment.id);
+    });
+    return;
+  }
+
+  if (payment.status === "rejected" || payment.status === "canceled") {
+    await prisma.transaction.updateMany({
+      where: { id: transaction.id, status: "PENDING" },
+      data: { status: "FAILED", mpPaymentId: payment.id },
+    });
+  }
+}
+
+export async function listUserTransactions(userId: string) {
+  return prisma.transaction.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getUserTransaction(userId: string, transactionId: string) {
+  const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  if (!transaction || transaction.userId !== userId) {
+    throw new NotFoundError("Transacao nao encontrada");
+  }
+  return transaction;
+}
