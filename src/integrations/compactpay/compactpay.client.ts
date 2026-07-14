@@ -20,6 +20,16 @@ type CreditoDigitalResponse = {
   data_hora: string;
 };
 
+type CreditoTesteResponse = {
+  ok: boolean;
+  machine_id: string;
+  topic: string | null;
+  payload: string;
+  valor: number;
+  command_id: string;
+  pulse_status: string;
+};
+
 type MaquinaOutResponse = {
   id_hardware: string;
   nome: string | null;
@@ -71,20 +81,48 @@ export class CompactPayGateway implements ICompactPayGateway {
   private readonly password = env.COMPACTPAY_API_PASSWORD!;
 
   async firePulses(params: CompactPayDispenseParams): Promise<CompactPayDispenseResult> {
-    const response = await this.authorizedFetch("/pagamentos/creditos-digitais", {
+    try {
+      const response = await this.authorizedFetch("/pagamentos/creditos-digitais", {
+        method: "POST",
+        body: JSON.stringify({
+          maquina_id: params.telemetryId,
+          pulsos: params.pulses,
+          origem: "agarramais",
+          referencia_externa: params.correlationId,
+        }),
+      });
+
+      const data = (await response.json()) as CreditoDigitalResponse;
+
+      return {
+        ok: data.pulse_status === "pulso_confirmado" || data.pulse_status === "saldo_pendente",
+        commandId: data.command_id,
+        pulseStatus: data.pulse_status,
+      };
+    } catch (error) {
+      if (error instanceof CompactPayRequestError && error.upstreamStatusCode === 404) {
+        return this.firePulsesViaLegacyCreditTest(params);
+      }
+
+      throw error;
+    }
+  }
+
+  private async firePulsesViaLegacyCreditTest(
+    params: CompactPayDispenseParams,
+  ): Promise<CompactPayDispenseResult> {
+    const response = await this.authorizedFetch(`/maquinas/${params.telemetryId}/credito-teste`, {
       method: "POST",
-      body: JSON.stringify({
-        maquina_id: params.telemetryId,
-        pulsos: params.pulses,
-        origem: "agarramais",
-        referencia_externa: params.correlationId,
-      }),
+      // Fallback para CompactPay antigo, onde ainda nao existe
+      // /pagamentos/creditos-digitais. A rota antiga recebe "valor" e a placa
+      // converte via configuracao local de valor por pulso.
+      body: JSON.stringify({ valor: params.pulses }),
     });
 
-    const data = (await response.json()) as CreditoDigitalResponse;
+    const data = (await response.json()) as CreditoTesteResponse;
 
     return {
-      ok: data.pulse_status === "pulso_confirmado",
+      ok: data.pulse_status === "pulso_confirmado" || data.pulse_status === "saldo_pendente",
       commandId: data.command_id,
       pulseStatus: data.pulse_status,
     };
