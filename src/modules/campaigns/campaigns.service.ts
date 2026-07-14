@@ -70,6 +70,10 @@ export async function updateCampaign(
   });
 }
 
+export async function deleteCampaign(id: string) {
+  await prisma.campaign.delete({ where: { id } });
+}
+
 export async function upsertCampaignPackageOverride(
   campaignId: string,
   input: {

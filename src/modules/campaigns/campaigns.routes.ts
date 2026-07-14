@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   createCampaign,
+  deleteCampaign,
   listCampaigns,
   updateCampaign,
   upsertCampaignMachineOverride,
@@ -53,6 +54,12 @@ export async function campaignsAdminRoutes(app: FastifyInstance) {
     const body = campaignUpdateSchema.parse(request.body);
     const campaign = await updateCampaign(id, body);
     return reply.status(200).send(campaign);
+  });
+
+  app.delete("/admin/campaigns/:id", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const { id } = campaignParamsSchema.parse(request.params);
+    await deleteCampaign(id);
+    return reply.status(204).send();
   });
 
   app.post(

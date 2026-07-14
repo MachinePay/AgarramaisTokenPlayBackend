@@ -39,3 +39,7 @@ export async function updatePackage(
 ) {
   return prisma.creditPackage.update({ where: { id }, data: input });
 }
+
+export async function deletePackage(id: string) {
+  await prisma.creditPackage.delete({ where: { id } });
+}

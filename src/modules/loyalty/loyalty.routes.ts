@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createLoyaltyLevel, listLoyaltyLevels, updateLoyaltyLevel } from "./loyalty.service";
+import { deleteLoyaltyLevel, createLoyaltyLevel, listLoyaltyLevels, updateLoyaltyLevel } from "./loyalty.service";
 
 const levelBodySchema = z.object({
   levelName: z.string().min(2),
@@ -29,5 +29,11 @@ export async function loyaltyAdminRoutes(app: FastifyInstance) {
     const body = levelUpdateBodySchema.parse(request.body);
     const level = await updateLoyaltyLevel(id, body);
     return reply.status(200).send(level);
+  });
+
+  app.delete("/admin/levels/:id", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const { id } = levelParamsSchema.parse(request.params);
+    await deleteLoyaltyLevel(id);
+    return reply.status(204).send();
   });
 }

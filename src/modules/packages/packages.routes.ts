@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createPackage, listActivePackages, listAllPackages, updatePackage } from "./packages.service";
+import { createPackage, deletePackage, listActivePackages, listAllPackages, updatePackage } from "./packages.service";
 
 const packageBodySchema = z.object({
   name: z.string().min(2),
@@ -37,5 +37,11 @@ export async function packagesRoutes(app: FastifyInstance) {
     const body = packageUpdateBodySchema.parse(request.body);
     const updated = await updatePackage(id, body);
     return reply.status(200).send(updated);
+  });
+
+  app.delete("/admin/packages/:id", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const { id } = packageParamsSchema.parse(request.params);
+    await deletePackage(id);
+    return reply.status(204).send();
   });
 }

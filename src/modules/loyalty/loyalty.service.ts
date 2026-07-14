@@ -59,6 +59,10 @@ export async function updateLoyaltyLevel(
   return prisma.loyaltyLevel.update({ where: { id }, data: input });
 }
 
+export async function deleteLoyaltyLevel(id: string) {
+  await prisma.loyaltyLevel.delete({ where: { id } });
+}
+
 export async function listLoyaltyLevels() {
   return prisma.loyaltyLevel.findMany({ orderBy: { requiredCredits: "asc" } });
 }

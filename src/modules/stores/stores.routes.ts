@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../utils/prisma";
 import { NotFoundError } from "../../utils/http-error";
 import { applyActiveMachineOverrides } from "../campaigns/campaigns.service";
-import { createStore, listActiveStores, listAllStores, updateStore } from "./stores.service";
+import { createStore, deleteStore, listActiveStores, listAllStores, updateStore } from "./stores.service";
 
 const storeParamsSchema = z.object({ id: z.string().uuid() });
 
@@ -96,5 +96,11 @@ export async function storesRoutes(app: FastifyInstance) {
     const body = storeUpdateBodySchema.parse(request.body);
     const store = await updateStore(id, body);
     return reply.status(200).send(store);
+  });
+
+  app.delete("/admin/stores/:id", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const { id } = storeParamsSchema.parse(request.params);
+    await deleteStore(id);
+    return reply.status(204).send();
   });
 }

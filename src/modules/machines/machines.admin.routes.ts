@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   createMachine,
+  deleteMachine,
   listAllMachines,
   listCompactPayMachines,
   updateMachine,
@@ -43,6 +44,12 @@ export async function machinesAdminRoutes(app: FastifyInstance) {
     const body = machineUpdateBodySchema.parse(request.body);
     const machine = await updateMachine(id, body);
     return reply.status(200).send(machine);
+  });
+
+  app.delete("/admin/machines/:id", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const { id } = machineParamsSchema.parse(request.params);
+    await deleteMachine(id);
+    return reply.status(204).send();
   });
 
   // Proxy para a listagem real de maquinas da CompactPay: usado pelo admin

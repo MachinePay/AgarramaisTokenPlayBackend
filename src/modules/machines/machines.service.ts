@@ -1,5 +1,7 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
 import { compactPayGateway } from "../../integrations/compactpay";
+import { ConflictError } from "../../utils/http-error";
 
 export async function listAllMachines() {
   return prisma.machine.findMany({ orderBy: { name: "asc" }, include: { store: true } });
@@ -27,6 +29,17 @@ export async function updateMachine(
   }>,
 ) {
   return prisma.machine.update({ where: { id }, data: input });
+}
+
+export async function deleteMachine(id: string) {
+  try {
+    await prisma.machine.delete({ where: { id } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      throw new ConflictError("Esta maquina possui historico de jogadas. Coloque em manutencao em vez de excluir.");
+    }
+    throw error;
+  }
 }
 
 /** Lista as maquinas reais cadastradas na CompactPay, para popular o dropdown de telemetryId no admin. */
