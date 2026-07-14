@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
+  checkoutCustomCredits,
   checkoutPackage,
   confirmTransaction,
   failTransaction,
@@ -12,6 +13,10 @@ import {
 
 const checkoutBodySchema = z.object({
   packageId: z.string().uuid(),
+});
+
+const checkoutCustomBodySchema = z.object({
+  credits: z.number().int().positive().max(10000),
 });
 
 const transactionParamsSchema = z.object({ id: z.string().uuid() });
@@ -31,6 +36,12 @@ export async function transactionsRoutes(app: FastifyInstance) {
   app.post("/transactions/checkout", { onRequest: [app.authenticate] }, async (request, reply) => {
     const { packageId } = checkoutBodySchema.parse(request.body);
     const transaction = await checkoutPackage(request.user.sub, packageId);
+    return reply.status(201).send(transaction);
+  });
+
+  app.post("/transactions/checkout-custom", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const { credits } = checkoutCustomBodySchema.parse(request.body);
+    const transaction = await checkoutCustomCredits(request.user.sub, credits);
     return reply.status(201).send(transaction);
   });
 

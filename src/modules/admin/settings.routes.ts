@@ -9,6 +9,11 @@ const settingsBodySchema = z.object({
 });
 
 export async function settingsAdminRoutes(app: FastifyInstance) {
+  app.get("/settings/credits", async (_request, reply) => {
+    const settings = await getAdminSettings();
+    return reply.status(200).send(settings);
+  });
+
   app.get("/admin/settings", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
     const settings = await getAdminSettings();
     return reply.status(200).send(settings);

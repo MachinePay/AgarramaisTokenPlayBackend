@@ -3,6 +3,7 @@ import { prisma } from "../../utils/prisma";
 import { BadRequestError, ConflictError, NotFoundError } from "../../utils/http-error";
 import { mercadoPagoGateway } from "../../integrations/mercadopago";
 import { getEffectivePackage } from "../campaigns/campaigns.service";
+import { getAdminSettings } from "../admin/settings.service";
 import { applyLevelUpBonuses, type LevelUpResult } from "../loyalty/loyalty.service";
 
 type TransactionClient = Prisma.TransactionClient;
@@ -30,6 +31,36 @@ export async function checkoutPackage(userId: string, packageId: string): Promis
 
   const preference = await mercadoPagoGateway.createPreference({
     title: `Agarra Mais - Pacote ${creditPackage.name}`,
+    amountBrl,
+    externalReference: transaction.id,
+    payerEmail: user.email,
+    payerName: user.name,
+  });
+
+  return prisma.transaction.update({
+    where: { id: transaction.id },
+    data: {
+      checkoutUrl: preference.checkoutUrl,
+      mpPreferenceId: preference.preferenceId,
+    },
+  });
+}
+
+export async function checkoutCustomCredits(userId: string, credits: number): Promise<Transaction> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  const settings = await getAdminSettings();
+  const amountBrl = Number(settings.tokenValueBrl) * credits;
+
+  const transaction = await prisma.transaction.create({
+    data: { userId, amountBrl, creditsAwarded: credits },
+  });
+
+  const preference = await mercadoPagoGateway.createPreference({
+    title: `Agarra Mais - ${credits} ficha${credits > 1 ? "s" : ""}`,
     amountBrl,
     externalReference: transaction.id,
     payerEmail: user.email,
