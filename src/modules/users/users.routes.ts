@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getUserNavbarSummary } from "../loyalty/loyalty.service";
-import { createAdminUser, listAdminUsers, updateAdminUser } from "./users.service";
+import { createAdminUser, grantUserCredits, listAdminUsers, updateAdminUser } from "./users.service";
 
 const userParamsSchema = z.object({ id: z.string().uuid() });
 
@@ -25,6 +25,10 @@ const userCreateSchema = z.object({
   role: z.enum(["CUSTOMER", "ADMIN"]).default("CUSTOMER"),
 });
 
+const grantCreditsSchema = z.object({
+  credits: z.number().int().positive().max(100000),
+});
+
 export async function usersRoutes(app: FastifyInstance) {
   app.get("/users/me", { onRequest: [app.authenticate] }, async (request, reply) => {
     const summary = await getUserNavbarSummary(request.user.sub);
@@ -46,6 +50,13 @@ export async function usersRoutes(app: FastifyInstance) {
     const { id } = userParamsSchema.parse(request.params);
     const body = userUpdateSchema.parse(request.body);
     const user = await updateAdminUser(request.user.sub, id, body);
+    return reply.status(200).send(user);
+  });
+
+  app.post("/admin/users/:id/credits", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const { id } = userParamsSchema.parse(request.params);
+    const { credits } = grantCreditsSchema.parse(request.body);
+    const user = await grantUserCredits(id, credits);
     return reply.status(200).send(user);
   });
 }

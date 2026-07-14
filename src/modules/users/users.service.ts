@@ -81,3 +81,16 @@ export async function updateAdminUser(
     select: adminUserSelect,
   });
 }
+
+export async function grantUserCredits(userId: string, credits: number) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: { creditBalance: { increment: credits } },
+    select: adminUserSelect,
+  });
+}
