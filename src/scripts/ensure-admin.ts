@@ -4,11 +4,28 @@ import { hashPassword } from "../utils/password";
 
 const prisma = new PrismaClient();
 
+const readEnv = (key: string) => {
+  const value = process.env[key];
+  if (!value) {
+    return undefined;
+  }
+
+  const cleaned = value.trim().replace(new RegExp(`^${key}\\s*=\\s*`, "i"), "").trim();
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    return cleaned.slice(1, -1).trim();
+  }
+
+  return cleaned;
+};
+
 async function main() {
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  const name = process.env.ADMIN_NAME || "Administrador Agarra Mais";
-  const cpf = process.env.ADMIN_CPF || "00000000000";
+  const email = readEnv("ADMIN_EMAIL");
+  const password = readEnv("ADMIN_PASSWORD");
+  const name = readEnv("ADMIN_NAME") || "Administrador Agarra Mais";
+  const cpf = readEnv("ADMIN_CPF") || "00000000000";
 
   if (!email || !password) {
     console.log("ADMIN_EMAIL/ADMIN_PASSWORD ausentes; pulando criacao de admin.");

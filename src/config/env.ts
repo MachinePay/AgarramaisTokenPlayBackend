@@ -10,6 +10,27 @@ const booleanFlag = (defaultValue: boolean) =>
     .default(defaultValue ? "true" : "false")
     .transform((value) => value === "true");
 
+const cleanEnvValue = (key: string, value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  let cleaned = value.trim();
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+
+  const assignmentPrefix = new RegExp(`^${key}\\s*=\\s*`, "i");
+  return cleaned.replace(assignmentPrefix, "").trim();
+};
+
+const normalizedEnv = Object.fromEntries(
+  Object.entries(process.env).map(([key, value]) => [key, cleanEnvValue(key, value)]),
+);
+
 const rawEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().default(3333),
@@ -37,7 +58,7 @@ const rawEnvSchema = z.object({
   BACKEND_PUBLIC_URL: z.string().url().default("http://localhost:3333"),
 });
 
-const parsed = rawEnvSchema.parse(process.env);
+const parsed = rawEnvSchema.parse(normalizedEnv);
 
 if (!parsed.COMPACTPAY_MOCK) {
   if (!parsed.COMPACTPAY_API_EMAIL || !parsed.COMPACTPAY_API_PASSWORD) {
