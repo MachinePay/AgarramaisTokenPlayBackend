@@ -6,6 +6,7 @@ export async function registerUser(input: {
   name: string;
   email: string;
   cpf: string;
+  phone?: string;
   password: string;
 }) {
   const existing = await prisma.user.findFirst({
@@ -22,6 +23,7 @@ export async function registerUser(input: {
       name: input.name,
       email: input.email,
       cpf: input.cpf,
+      phone: input.phone,
       passwordHash,
     },
   });
