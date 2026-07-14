@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import authPlugin from "./plugins/auth";
 import { HttpError } from "./utils/http-error";
@@ -45,6 +46,20 @@ export function buildApp() {
 
     if (error instanceof HttpError) {
       return reply.status(error.statusCode).send({ message: error.message });
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2025") {
+        return reply.status(404).send({ message: "Registro nao encontrado" });
+      }
+
+      if (error.code === "P2002") {
+        return reply.status(409).send({ message: "Ja existe um cadastro com esses dados" });
+      }
+
+      if (error.code === "P2003") {
+        return reply.status(409).send({ message: "Este cadastro possui vinculos e nao pode ser excluido" });
+      }
     }
 
     app.log.error(error);

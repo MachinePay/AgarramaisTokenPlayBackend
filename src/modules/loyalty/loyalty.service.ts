@@ -1,6 +1,6 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
-import { NotFoundError } from "../../utils/http-error";
+import { ConflictError, NotFoundError } from "../../utils/http-error";
 import { calculateLoyaltyProgress, getCrossedLevels } from "./loyalty.util";
 
 type TransactionClient = Prisma.TransactionClient;
@@ -56,7 +56,14 @@ export async function updateLoyaltyLevel(
     status: "ACTIVE" | "DRAFT";
   }>,
 ) {
-  return prisma.loyaltyLevel.update({ where: { id }, data: input });
+  try {
+    return await prisma.loyaltyLevel.update({ where: { id }, data: input });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ConflictError("Ja existe um nivel com essa quantidade de creditos");
+    }
+    throw error;
+  }
 }
 
 export async function deleteLoyaltyLevel(id: string) {
