@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../../utils/prisma";
 import { BadRequestError, ConflictError, HttpError, NotFoundError } from "../../utils/http-error";
 import { compactPayGateway } from "../../integrations/compactpay";
+import { CompactPayRequestError } from "../../integrations/compactpay/compactpay.client";
 import { applyActiveMachineOverride } from "../campaigns/campaigns.service";
 
 export type PlayMachineResult = {
@@ -89,7 +90,7 @@ export async function playMachine(
 
     return {
       gameplayLogId: log.id,
-      creditsDebited: machine.costPerGame,
+      creditsDebited: totalCredits,
       pulsesSent: totalPulses,
       remainingBalance: debited.creditBalance,
       pulseStatus: dispenseResult.pulseStatus,
@@ -108,6 +109,20 @@ export async function playMachine(
       });
       await refundCredits(userId, totalCredits);
     }
+
+    if (error instanceof CompactPayRequestError) {
+      if (error.upstreamStatusCode === 404) {
+        throw new BadRequestError(
+          "Maquina nao encontrada na CompactPay. Verifique o ID CompactPay/telemetryId cadastrado nesta maquina.",
+        );
+      }
+
+      throw new HttpError(
+        502,
+        "Nao foi possivel comunicar com a CompactPay agora. Os creditos foram estornados.",
+      );
+    }
+
     throw error;
   } finally {
     await prisma.machine.update({ where: { id: machineId }, data: { status: "AVAILABLE" } });

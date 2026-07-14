@@ -29,6 +29,16 @@ type MaquinaOutResponse = {
   cliente_nome: string | null;
 };
 
+export class CompactPayRequestError extends Error {
+  constructor(
+    public readonly upstreamStatusCode: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "CompactPayRequestError";
+  }
+}
+
 /**
  * Cliente HTTP real da CompactPay.
  *
@@ -117,7 +127,10 @@ export class CompactPayGateway implements ICompactPayGateway {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`CompactPay: requisicao falhou (${response.status}) ${detail}`);
+      throw new CompactPayRequestError(
+        response.status,
+        `CompactPay: requisicao falhou (${response.status}) ${detail}`,
+      );
     }
 
     return response;
