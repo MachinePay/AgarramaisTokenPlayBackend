@@ -3,7 +3,9 @@ import { z } from "zod";
 import { getAdminSettings, updateAdminSettings } from "./settings.service";
 
 const settingsBodySchema = z.object({
-  tokenValueBrl: z.number().positive(),
+  tokenBundleAmountBrl: z.number().positive().optional(),
+  tokenBundleCredits: z.number().int().positive().optional(),
+  tokenValueBrl: z.number().positive().optional(),
 });
 
 export async function settingsAdminRoutes(app: FastifyInstance) {
