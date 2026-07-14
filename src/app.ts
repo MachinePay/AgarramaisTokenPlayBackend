@@ -12,6 +12,7 @@ import { packagesRoutes } from "./modules/packages/packages.routes";
 import { transactionsRoutes } from "./modules/transactions/transactions.routes";
 import { machinesAdminRoutes } from "./modules/machines/machines.admin.routes";
 import { dashboardAdminRoutes } from "./modules/admin/dashboard.routes";
+import { campaignsAdminRoutes } from "./modules/campaigns/campaigns.routes";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -28,6 +29,7 @@ export function buildApp() {
   app.register(transactionsRoutes);
   app.register(machinesAdminRoutes);
   app.register(dashboardAdminRoutes);
+  app.register(campaignsAdminRoutes);
 
   app.get("/health", async () => ({ status: "ok" }));
 

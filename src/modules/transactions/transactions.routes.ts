@@ -6,6 +6,7 @@ import {
   failTransaction,
   getUserTransaction,
   handleMercadoPagoPaymentUpdate,
+  listAdminTransactions,
   listUserTransactions,
 } from "./transactions.service";
 
@@ -35,6 +36,11 @@ export async function transactionsRoutes(app: FastifyInstance) {
 
   app.get("/transactions", { onRequest: [app.authenticate] }, async (request, reply) => {
     const transactions = await listUserTransactions(request.user.sub);
+    return reply.status(200).send(transactions);
+  });
+
+  app.get("/admin/transactions", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
+    const transactions = await listAdminTransactions();
     return reply.status(200).send(transactions);
   });
 

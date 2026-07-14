@@ -3,6 +3,7 @@ import fp from "fastify-plugin";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../config/env";
 import { UnauthorizedError, ForbiddenError } from "../utils/http-error";
+import { prisma } from "../utils/prisma";
 
 export type JwtPayload = {
   sub: string;
@@ -35,6 +36,13 @@ export default fp(async (app) => {
     } catch {
       throw new UnauthorizedError("Token invalido ou ausente");
     }
+    const user = await prisma.user.findUnique({
+      where: { id: request.user.sub },
+      select: { status: true },
+    });
+    if (!user || user.status !== "ACTIVE") {
+      throw new UnauthorizedError("Usuario bloqueado ou inexistente");
+    }
   });
 
   app.decorate("requireAdmin", async (request: FastifyRequest) => {
@@ -43,7 +51,14 @@ export default fp(async (app) => {
     } catch {
       throw new UnauthorizedError("Token invalido ou ausente");
     }
-    if (request.user.role !== "ADMIN") {
+    const user = await prisma.user.findUnique({
+      where: { id: request.user.sub },
+      select: { status: true, role: true },
+    });
+    if (!user || user.status !== "ACTIVE") {
+      throw new UnauthorizedError("Usuario bloqueado ou inexistente");
+    }
+    if (user.role !== "ADMIN") {
       throw new ForbiddenError("Rota exclusiva para administradores");
     }
   });

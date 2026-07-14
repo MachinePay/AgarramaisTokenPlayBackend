@@ -95,6 +95,7 @@ model Machine {
 
   store        Store         @relation(fields: [storeId], references: [id])
   gameplayLogs GameplayLog[]
+  campaignMachineOverrides CampaignMachineOverride[]
 
   @@index([storeId])
   @@map("machines")
@@ -127,9 +128,68 @@ model CreditPackage {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   transactions Transaction[]
+  campaignPackageOverrides CampaignPackageOverride[]
 
   @@unique([name])
   @@map("credit_packages")
+}
+
+model Campaign {
+  id        String   @id @default(uuid())
+  name      String
+  startsAt  DateTime @map("starts_at")
+  endsAt    DateTime @map("ends_at")
+  active    Boolean  @default(true)
+  notes     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  packageOverrides CampaignPackageOverride[]
+  machineOverrides CampaignMachineOverride[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("campaigns")
+}
+
+model CampaignPackageOverride {
+  id          String  @id @default(uuid())
+  campaignId  String  @map("campaign_id")
+  packageId   String  @map("package_id")
+  amountBrl   Decimal @map("amount_brl") @db.Decimal(10, 2)
+  baseCredits Int     @map("base_credits")
+  bonusCredits Int    @default(0) @map("bonus_credits")
+  isPopular   Boolean @default(false) @map("is_popular")
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  campaign Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  package  CreditPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, packageId])
+  @@index([packageId])
+  @@map("campaign_package_overrides")
+}
+
+model CampaignMachineOverride {
+  id              String        @id @default(uuid())
+  campaignId      String        @map("campaign_id")
+  machineId       String        @map("machine_id")
+  costPerGame     Int           @map("cost_per_game")
+  pulsesPerCredit Int           @map("pulses_per_credit")
+  status          MachineStatus?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  machine  Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, machineId])
+  @@index([machineId])
+  @@map("campaign_machine_overrides")
 }
 
 model Transaction {

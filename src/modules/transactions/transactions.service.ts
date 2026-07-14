@@ -2,6 +2,7 @@ import type { Prisma, Transaction } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
 import { BadRequestError, ConflictError, NotFoundError } from "../../utils/http-error";
 import { mercadoPagoGateway } from "../../integrations/mercadopago";
+import { getEffectivePackage } from "../campaigns/campaigns.service";
 import { applyLevelUpBonuses, type LevelUpResult } from "../loyalty/loyalty.service";
 
 type TransactionClient = Prisma.TransactionClient;
@@ -14,16 +15,12 @@ type TransactionClient = Prisma.TransactionClient;
 export async function checkoutPackage(userId: string, packageId: string): Promise<Transaction> {
   const [user, creditPackage] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
-    prisma.creditPackage.findUnique({ where: { id: packageId } }),
+    getEffectivePackage(packageId),
   ]);
 
   if (!user) {
     throw new NotFoundError("Usuario nao encontrado");
   }
-  if (!creditPackage || !creditPackage.active) {
-    throw new NotFoundError("Pacote de creditos nao encontrado");
-  }
-
   const amountBrl = Number(creditPackage.amountBrl);
   const creditsAwarded = creditPackage.baseCredits + creditPackage.bonusCredits;
 
@@ -160,6 +157,28 @@ export async function listUserTransactions(userId: string) {
   return prisma.transaction.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function listAdminTransactions() {
+  return prisma.transaction.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      package: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
   });
 }
 

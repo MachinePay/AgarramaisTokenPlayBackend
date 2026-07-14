@@ -7,14 +7,15 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "start": "prisma migrate deploy && node dist/scripts/ensure-admin.js && node dist/server.js",
     "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "admin:ensure": "tsx src/scripts/ensure-admin.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -27,12 +28,12 @@
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.0.1",
+    "prisma": "^5.20.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.10",
-    "prisma": "^5.20.0",
     "tsx": "^4.16.2",
     "typescript": "^5.5.4"
   }

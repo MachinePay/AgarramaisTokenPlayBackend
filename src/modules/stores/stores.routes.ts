@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../utils/prisma";
 import { NotFoundError } from "../../utils/http-error";
+import { applyActiveMachineOverrides } from "../campaigns/campaigns.service";
 import { createStore, listActiveStores, listAllStores, updateStore } from "./stores.service";
 
 const storeParamsSchema = z.object({ id: z.string().uuid() });
@@ -33,17 +34,50 @@ export async function storesRoutes(app: FastifyInstance) {
 
     const machines = await prisma.machine.findMany({
       where: { storeId: id },
-      select: {
-        id: true,
-        name: true,
-        imageUrl: true,
-        status: true,
-        costPerGame: true,
-      },
       orderBy: { name: "asc" },
     });
 
-    return reply.status(200).send(machines);
+    const effectiveMachines = await applyActiveMachineOverrides(machines);
+
+    return reply.status(200).send(
+      effectiveMachines.map((machine) => ({
+        id: machine.id,
+        name: machine.name,
+        imageUrl: machine.imageUrl,
+        status: machine.status,
+        costPerGame: machine.costPerGame,
+      })),
+    );
+  });
+
+  app.get("/machines/:id/context", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const { id } = storeParamsSchema.parse(request.params);
+
+    const machine = await prisma.machine.findUnique({
+      where: { id },
+      include: { store: true },
+    });
+    if (!machine) {
+      throw new NotFoundError("Maquina nao encontrada");
+    }
+
+    const [effectiveMachine] = await applyActiveMachineOverrides([machine]);
+
+    return reply.status(200).send({
+      store: {
+        id: effectiveMachine.store.id,
+        name: effectiveMachine.store.name,
+        location: effectiveMachine.store.location,
+        status: effectiveMachine.store.status,
+      },
+      machine: {
+        id: effectiveMachine.id,
+        name: effectiveMachine.name,
+        imageUrl: effectiveMachine.imageUrl,
+        status: effectiveMachine.status,
+        costPerGame: effectiveMachine.costPerGame,
+      },
+    });
   });
 
   app.get("/admin/stores", { onRequest: [app.requireAdmin] }, async (_request, reply) => {

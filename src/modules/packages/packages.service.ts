@@ -1,10 +1,14 @@
 import { prisma } from "../../utils/prisma";
+import { applyActivePackageOverrides } from "../campaigns/campaigns.service";
 
 export async function listActivePackages() {
-  return prisma.creditPackage.findMany({
+  const packages = await prisma.creditPackage.findMany({
     where: { active: true },
     orderBy: { amountBrl: "asc" },
   });
+
+  const effectivePackages = await applyActivePackageOverrides(packages);
+  return effectivePackages.sort((a, b) => Number(a.amountBrl) - Number(b.amountBrl));
 }
 
 export async function listAllPackages() {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../../utils/prisma";
 import { BadRequestError, ConflictError, HttpError, NotFoundError } from "../../utils/http-error";
 import { compactPayGateway } from "../../integrations/compactpay";
+import { applyActiveMachineOverride } from "../campaigns/campaigns.service";
 
 export type PlayMachineResult = {
   gameplayLogId: string;
@@ -25,10 +26,11 @@ export async function playMachine(
   machineId: string,
   quantity = 1,
 ): Promise<PlayMachineResult> {
-  const machine = await prisma.machine.findUnique({ where: { id: machineId } });
-  if (!machine) {
+  const storedMachine = await prisma.machine.findUnique({ where: { id: machineId } });
+  if (!storedMachine) {
     throw new NotFoundError("Maquina nao encontrada");
   }
+  const machine = await applyActiveMachineOverride(storedMachine);
   if (machine.status !== "AVAILABLE") {
     throw new ConflictError("Maquina indisponivel no momento");
   }
@@ -110,6 +112,46 @@ export async function playMachine(
   } finally {
     await prisma.machine.update({ where: { id: machineId }, data: { status: "AVAILABLE" } });
   }
+}
+
+export async function listUserGameplayLogs(userId: string) {
+  return prisma.gameplayLog.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: {
+      machine: {
+        select: {
+          name: true,
+          store: { select: { name: true } },
+        },
+      },
+    },
+  });
+}
+
+export async function listAdminGameplayLogs() {
+  return prisma.gameplayLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      machine: {
+        select: {
+          id: true,
+          name: true,
+          telemetryId: true,
+          store: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
 }
 
 async function refundCredits(userId: string, credits: number): Promise<void> {

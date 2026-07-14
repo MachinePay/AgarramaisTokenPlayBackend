@@ -32,6 +32,9 @@ export async function authenticateUser(email: string, password: string) {
   if (!user) {
     throw new UnauthorizedError("Email ou senha invalidos");
   }
+  if (user.status !== "ACTIVE") {
+    throw new UnauthorizedError("Usuario bloqueado");
+  }
 
   const passwordMatches = await comparePassword(password, user.passwordHash);
   if (!passwordMatches) {
