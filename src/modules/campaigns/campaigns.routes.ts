@@ -11,16 +11,6 @@ import {
 
 const campaignParamsSchema = z.object({ id: z.string().uuid() });
 
-const campaignBodySchema = z.object({
-  name: z.string().min(2),
-  startsAt: z.coerce.date(),
-  endsAt: z.coerce.date(),
-  active: z.boolean().default(true),
-  notes: z.string().optional(),
-});
-
-const campaignUpdateSchema = campaignBodySchema.partial();
-
 const packageOverrideBodySchema = z.object({
   packageId: z.string().uuid(),
   amountBrl: z.number().positive(),
@@ -36,6 +26,20 @@ const machineOverrideBodySchema = z.object({
   pulsesPerCredit: z.number().int().positive(),
   status: z.enum(["AVAILABLE", "BUSY", "MAINTENANCE"]).optional(),
 });
+
+const campaignBodySchema = z.object({
+  name: z.string().min(2),
+  startsAt: z.coerce.date(),
+  endsAt: z.coerce.date(),
+  active: z.boolean().default(true),
+  notes: z.string().optional(),
+  packageOverrides: z.array(packageOverrideBodySchema).optional(),
+  machineOverrides: z.array(machineOverrideBodySchema).optional(),
+});
+
+const campaignUpdateSchema = campaignBodySchema
+  .omit({ packageOverrides: true, machineOverrides: true })
+  .partial();
 
 export async function campaignsAdminRoutes(app: FastifyInstance) {
   app.get("/admin/campaigns", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
