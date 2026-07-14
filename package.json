@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "start": "npm run build && prisma migrate deploy && node dist/scripts/ensure-admin.js && node dist/server.js",
+    "start": "npm run build && node dist/scripts/start-production.js",
     "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",

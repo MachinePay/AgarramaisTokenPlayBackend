@@ -179,7 +179,7 @@ model CampaignMachineOverride {
   machineId       String        @map("machine_id")
   costPerGame     Int           @map("cost_per_game")
   pulsesPerCredit Int           @map("pulses_per_credit")
-  status          MachineStatus?
+  status          String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
