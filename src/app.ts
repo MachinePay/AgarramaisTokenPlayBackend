@@ -62,6 +62,12 @@ export function buildApp() {
       }
     }
 
+    const statusCode = (error as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+      const message = error instanceof Error ? error.message : "Requisicao invalida";
+      return reply.status(statusCode).send({ message });
+    }
+
     app.log.error(error);
     return reply.status(500).send({ message: "Erro interno no servidor" });
   });
