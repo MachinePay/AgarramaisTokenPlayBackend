@@ -192,6 +192,15 @@ model CampaignMachineOverride {
   @@map("campaign_machine_overrides")
 }
 
+model AppSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
 model Transaction {
   id             String            @id @default(uuid())
   userId         String            @map("user_id")
