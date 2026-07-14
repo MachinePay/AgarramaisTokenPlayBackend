@@ -24,7 +24,17 @@ const cleanEnvValue = (key: string, value: unknown) => {
   }
 
   const assignmentPrefix = new RegExp(`^${key}\\s*=\\s*`, "i");
-  return cleaned.replace(assignmentPrefix, "").trim();
+  cleaned = cleaned.replace(assignmentPrefix, "").trim();
+  if (!cleaned) {
+    return undefined;
+  }
+
+  const urlKeys = new Set(["APP_BASE_URL", "BACKEND_PUBLIC_URL", "COMPACTPAY_API_URL", "MP_API_BASE_URL"]);
+  if (urlKeys.has(key) && !/^[a-z][a-z0-9+.-]*:\/\//i.test(cleaned)) {
+    return `https://${cleaned}`;
+  }
+
+  return cleaned;
 };
 
 const normalizedEnv = Object.fromEntries(

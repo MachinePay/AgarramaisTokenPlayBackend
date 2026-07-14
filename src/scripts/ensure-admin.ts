@@ -11,6 +11,9 @@ const readEnv = (key: string) => {
   }
 
   const cleaned = value.trim().replace(new RegExp(`^${key}\\s*=\\s*`, "i"), "").trim();
+  if (!cleaned) {
+    return undefined;
+  }
   if (
     (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
     (cleaned.startsWith("'") && cleaned.endsWith("'"))
