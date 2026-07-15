@@ -4,7 +4,7 @@ import { prisma } from "../../utils/prisma";
 import { NotFoundError } from "../../utils/http-error";
 import { applyActiveMachineOverrides } from "../campaigns/campaigns.service";
 import { applyCompactPayOnlineStatus } from "../machines/machines.service";
-import { createStore, deleteStore, listActiveStores, listAllStores, updateStore } from "./stores.service";
+import { createStore, deleteStore, listActiveStores, listAllStores, setStoreFavorite, updateStore } from "./stores.service";
 
 const storeParamsSchema = z.object({ id: z.string().uuid() });
 
@@ -19,10 +19,26 @@ const storeUpdateBodySchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
 });
 
+const storeFavoriteBodySchema = z.object({
+  favorite: z.boolean(),
+});
+
 export async function storesRoutes(app: FastifyInstance) {
   app.get("/stores", async (_request, reply) => {
     const stores = await listActiveStores();
     return reply.status(200).send(stores);
+  });
+
+  app.get("/stores/me", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const stores = await listActiveStores(request.user.sub);
+    return reply.status(200).send(stores);
+  });
+
+  app.put("/stores/:id/favorite", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const { id } = storeParamsSchema.parse(request.params);
+    const { favorite } = storeFavoriteBodySchema.parse(request.body);
+    const result = await setStoreFavorite(request.user.sub, id, favorite);
+    return reply.status(200).send(result);
   });
 
   app.get("/stores/:id/machines", async (request, reply) => {

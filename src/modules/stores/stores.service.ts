@@ -2,8 +2,28 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
 import { ConflictError } from "../../utils/http-error";
 
-export async function listActiveStores() {
-  return prisma.store.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } });
+export async function listActiveStores(userId?: string) {
+  const stores = await prisma.store.findMany({
+    where: { status: "ACTIVE" },
+    orderBy: { name: "asc" },
+    include: userId
+      ? {
+          favorites: {
+            where: { userId },
+            select: { id: true },
+          },
+        }
+      : undefined,
+  });
+
+  return stores
+    .map((store) => {
+      const storeWithFavorites = store as typeof store & { favorites?: Array<{ id: string }> };
+      const isFavorite = Boolean(storeWithFavorites.favorites?.length);
+      const { favorites: _favorites, ...rest } = storeWithFavorites;
+      return { ...rest, isFavorite };
+    })
+    .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite) || a.name.localeCompare(b.name));
 }
 
 export async function listAllStores() {
@@ -30,4 +50,23 @@ export async function deleteStore(id: string) {
     }
     throw error;
   }
+}
+
+export async function setStoreFavorite(userId: string, storeId: string, favorite: boolean) {
+  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  if (!store || store.status !== "ACTIVE") {
+    throw new ConflictError("Loja indisponivel para favorito");
+  }
+
+  if (favorite) {
+    await prisma.storeFavorite.upsert({
+      where: { userId_storeId: { userId, storeId } },
+      update: {},
+      create: { userId, storeId },
+    });
+  } else {
+    await prisma.storeFavorite.deleteMany({ where: { userId, storeId } });
+  }
+
+  return { storeId, isFavorite: favorite };
 }

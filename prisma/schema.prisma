@@ -62,6 +62,7 @@ model User {
 
   transactions Transaction[]
   gameplayLogs GameplayLog[]
+  storeFavorites StoreFavorite[]
 
   @@map("users")
 }
@@ -76,8 +77,24 @@ model Store {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   machines Machine[]
+  favorites StoreFavorite[]
 
   @@map("stores")
+}
+
+model StoreFavorite {
+  id      String @id @default(uuid())
+  userId  String @map("user_id")
+  storeId String @map("store_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+  @@map("store_favorites")
 }
 
 model Machine {
