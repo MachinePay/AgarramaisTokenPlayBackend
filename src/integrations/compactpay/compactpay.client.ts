@@ -39,6 +39,19 @@ type MaquinaOutResponse = {
   cliente_nome: string | null;
 };
 
+const COMPACTPAY_CONFIRMED_PULSE_STATUSES = new Set([
+  "pulso_confirmado",
+  "pulsos_confirmados",
+  "pulso_enviado",
+  "pulso_unitario",
+  "saldo_pendente",
+  "liberado",
+]);
+
+function isConfirmedPulseStatus(status: string | null | undefined): boolean {
+  return COMPACTPAY_CONFIRMED_PULSE_STATUSES.has(String(status || "").trim().toLowerCase());
+}
+
 export class CompactPayRequestError extends Error {
   constructor(
     public readonly upstreamStatusCode: number,
@@ -95,7 +108,7 @@ export class CompactPayGateway implements ICompactPayGateway {
       const data = (await response.json()) as CreditoDigitalResponse;
 
       return {
-        ok: data.pulse_status === "pulso_confirmado" || data.pulse_status === "saldo_pendente",
+        ok: isConfirmedPulseStatus(data.pulse_status),
         commandId: data.command_id,
         pulseStatus: data.pulse_status,
       };
@@ -122,7 +135,7 @@ export class CompactPayGateway implements ICompactPayGateway {
     const data = (await response.json()) as CreditoTesteResponse;
 
     return {
-      ok: data.pulse_status === "pulso_confirmado" || data.pulse_status === "saldo_pendente",
+      ok: isConfirmedPulseStatus(data.pulse_status),
       commandId: data.command_id,
       pulseStatus: data.pulse_status,
     };
