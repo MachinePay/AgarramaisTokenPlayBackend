@@ -1,6 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createPackage, deletePackage, listActivePackages, listAllPackages, updatePackage } from "./packages.service";
+import {
+  createPackage,
+  deletePackage,
+  listActivePackages,
+  listAllPackages,
+  listHomePackages,
+  updatePackage,
+} from "./packages.service";
 
 const packageBodySchema = z.object({
   name: z.string().min(2),
@@ -8,6 +15,7 @@ const packageBodySchema = z.object({
   baseCredits: z.number().int().positive(),
   bonusCredits: z.number().int().nonnegative().default(0),
   isPopular: z.boolean().default(false),
+  showOnHome: z.boolean().default(false),
   active: z.boolean().default(true),
 });
 
@@ -18,6 +26,11 @@ export async function packagesRoutes(app: FastifyInstance) {
   // Vitrine de recarga do cliente: so pacotes ativos.
   app.get("/packages", async (_request, reply) => {
     const packages = await listActivePackages();
+    return reply.status(200).send(packages);
+  });
+
+  app.get("/packages/home", async (_request, reply) => {
+    const packages = await listHomePackages();
     return reply.status(200).send(packages);
   });
 

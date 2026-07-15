@@ -11,6 +11,16 @@ export async function listActivePackages() {
   return effectivePackages.sort((a, b) => Number(a.amountBrl) - Number(b.amountBrl));
 }
 
+export async function listHomePackages() {
+  const packages = await prisma.creditPackage.findMany({
+    where: { active: true, showOnHome: true },
+    orderBy: [{ isPopular: "desc" }, { amountBrl: "asc" }],
+    take: 6,
+  });
+
+  return applyActivePackageOverrides(packages);
+}
+
 export async function listAllPackages() {
   return prisma.creditPackage.findMany({ orderBy: { amountBrl: "asc" } });
 }
@@ -21,6 +31,7 @@ export async function createPackage(input: {
   baseCredits: number;
   bonusCredits: number;
   isPopular?: boolean;
+  showOnHome?: boolean;
   active?: boolean;
 }) {
   return prisma.creditPackage.create({ data: input });
@@ -34,6 +45,7 @@ export async function updatePackage(
     baseCredits: number;
     bonusCredits: number;
     isPopular: boolean;
+    showOnHome: boolean;
     active: boolean;
   }>,
 ) {

@@ -123,6 +123,7 @@ model CreditPackage {
   baseCredits  Int     @map("base_credits")
   bonusCredits Int     @default(0) @map("bonus_credits")
   isPopular    Boolean @default(false) @map("is_popular")
+  showOnHome   Boolean @default(false) @map("show_on_home")
   active       Boolean @default(true)
 
   createdAt DateTime @default(now()) @map("created_at")
