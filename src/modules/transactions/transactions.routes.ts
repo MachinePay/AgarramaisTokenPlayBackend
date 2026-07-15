@@ -6,6 +6,7 @@ import {
   confirmTransaction,
   failTransaction,
   getUserTransaction,
+  handleMercadoPagoMerchantOrderUpdate,
   handleMercadoPagoPaymentUpdate,
   listAdminTransactions,
   listUserTransactions,
@@ -29,6 +30,8 @@ const transactionStatusQuerySchema = z.object({
 
 const mercadoPagoWebhookQuerySchema = z.object({
   topic: z.string().optional(),
+  type: z.string().optional(),
+  action: z.string().optional(),
   id: z.string().optional(),
 });
 
@@ -72,22 +75,41 @@ export async function transactionsRoutes(app: FastifyInstance) {
     return reply.status(200).send(transaction);
   });
 
+  async function processMercadoPagoWebhook(queryInput: unknown, bodyInput: unknown) {
+    const query = mercadoPagoWebhookQuerySchema.parse(queryInput);
+    const body = mercadoPagoWebhookBodySchema.parse(bodyInput ?? {});
+
+    const topic = query.topic || query.type || query.action || body.type || body.action || "";
+    const resourceId = query.id || (body.data?.id ? String(body.data.id) : undefined);
+
+    if (!resourceId) return;
+
+    if (topic.includes("merchant_order")) {
+      await handleMercadoPagoMerchantOrderUpdate(resourceId);
+      return;
+    }
+
+    if (topic.includes("payment")) {
+      await handleMercadoPagoPaymentUpdate(resourceId);
+    }
+  }
+
   // Webhook publico do Mercado Pago (sem autenticacao - eles chamam direto).
-  // Responde 200 de imediato e processa em background, como recomendado pelo
-  // Mercado Pago, para evitar timeout/retentativas desnecessarias.
+  // Aceita POST (webhooks atuais) e GET (IPN/formatos antigos). Respondemos
+  // rapido e processamos em background para evitar timeout/retentativas.
   app.post("/webhooks/mercadopago", async (request, reply) => {
-    const query = mercadoPagoWebhookQuerySchema.parse(request.query);
-    const body = mercadoPagoWebhookBodySchema.parse(request.body ?? {});
-
-    const topic = query.topic || body.type || "";
-    const paymentId = query.id || (body.data?.id ? String(body.data.id) : undefined);
-
     reply.status(200).send({ received: true });
 
-    if (!paymentId || !topic.includes("payment")) return;
-
-    handleMercadoPagoPaymentUpdate(paymentId).catch((error) => {
+    processMercadoPagoWebhook(request.query, request.body).catch((error) => {
       app.log.error(error, "Falha ao processar webhook do Mercado Pago");
+    });
+  });
+
+  app.get("/webhooks/mercadopago", async (request, reply) => {
+    reply.status(200).send({ received: true });
+
+    processMercadoPagoWebhook(request.query, {}).catch((error) => {
+      app.log.error(error, "Falha ao processar IPN do Mercado Pago");
     });
   });
 

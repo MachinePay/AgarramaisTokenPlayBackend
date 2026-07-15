@@ -9,8 +9,8 @@ import type {
 
 type PreferenceResponse = {
   id: string;
-  init_point: string;
-  sandbox_init_point: string;
+  init_point?: string;
+  sandbox_init_point?: string;
 };
 
 type PaymentResponse = {
@@ -19,6 +19,13 @@ type PaymentResponse = {
   status_detail: string | null;
   external_reference: string | null;
   transaction_amount: number | null;
+};
+
+type MerchantOrderResponse = {
+  payments?: Array<{
+    id: number | string;
+    status?: string;
+  }>;
 };
 
 function normalizeStatus(rawStatus: string): MercadoPagoPaymentStatus {
@@ -70,6 +77,7 @@ export class MercadoPagoGateway implements IMercadoPagoGateway {
           },
         ],
         external_reference: params.externalReference,
+        metadata: { transaction_id: params.externalReference },
         payer: { email: params.payerEmail, name: params.payerName },
         back_urls: {
           success: `${backUrlBase}/checkout/sucesso`,
@@ -78,6 +86,7 @@ export class MercadoPagoGateway implements IMercadoPagoGateway {
         },
         auto_return: "approved",
         notification_url: `${env.BACKEND_PUBLIC_URL.replace(/\/$/, "")}/webhooks/mercadopago`,
+        statement_descriptor: "AGARRA MAIS",
       }),
     });
 
@@ -88,9 +97,16 @@ export class MercadoPagoGateway implements IMercadoPagoGateway {
 
     const data = (await response.json()) as PreferenceResponse;
 
+    const checkoutUrl = data.init_point;
+    if (!checkoutUrl) {
+      throw new Error(
+        "Mercado Pago: preferencia criada sem URL de producao. Verifique se o MP_ACCESS_TOKEN e de producao (APP_USR-) e nao de teste (TEST-).",
+      );
+    }
+
     return {
       preferenceId: data.id,
-      checkoutUrl: data.init_point || data.sandbox_init_point,
+      checkoutUrl,
     };
   }
 
@@ -115,5 +131,21 @@ export class MercadoPagoGateway implements IMercadoPagoGateway {
       externalReference: data.external_reference,
       transactionAmount: data.transaction_amount,
     };
+  }
+
+  async getMerchantOrderPaymentIds(merchantOrderId: string): Promise<string[]> {
+    const response = await fetch(`${env.MP_API_BASE_URL}/merchant_orders/${merchantOrderId}`, {
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+
+    if (response.status === 404) return [];
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Mercado Pago: falha ao consultar merchant_order (${response.status}) ${detail}`);
+    }
+
+    const data = (await response.json()) as MerchantOrderResponse;
+    return (data.payments ?? []).map((payment) => String(payment.id));
   }
 }

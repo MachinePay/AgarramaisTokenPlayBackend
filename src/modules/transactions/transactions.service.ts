@@ -193,6 +193,11 @@ export async function handleMercadoPagoPaymentUpdate(paymentId: string): Promise
   }
 }
 
+export async function handleMercadoPagoMerchantOrderUpdate(merchantOrderId: string): Promise<void> {
+  const paymentIds = await mercadoPagoGateway.getMerchantOrderPaymentIds(merchantOrderId);
+  await Promise.all(paymentIds.map((paymentId) => handleMercadoPagoPaymentUpdate(paymentId)));
+}
+
 export async function syncUserTransactionFromMercadoPago(
   userId: string,
   transactionId: string,

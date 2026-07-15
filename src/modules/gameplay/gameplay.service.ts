@@ -14,12 +14,12 @@ export type PlayMachineResult = {
 };
 
 /**
- * Regra B: debita creditos do usuario, converte para pulsos fisicos e dispara
- * o comando na CompactPay. Se a CompactPay nao confirmar o pulso, os creditos
+ * Regra B: debita fichas do usuario, converte para pulsos fisicos e dispara
+ * o comando na CompactPay. Se a CompactPay nao confirmar o pulso, os fichas
  * sao estornados automaticamente.
  *
  * `quantity` permite disparar varias jogadas de uma vez (seletor +/- do
- * WebApp): os creditos e pulsos sao multiplicados, mas apenas UM comando de
+ * WebApp): os fichas e pulsos sao multiplicados, mas apenas UM comando de
  * pulso e enviado a CompactPay.
  */
 export async function playMachine(
@@ -51,7 +51,7 @@ export async function playMachine(
     if (updateResult.count === 0) {
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw new NotFoundError("Usuario nao encontrado");
-      throw new BadRequestError("Saldo de creditos insuficiente");
+      throw new BadRequestError("Saldo de fichas insuficiente");
     }
 
     const machineUpdate = await tx.machine.updateMany({
@@ -119,7 +119,7 @@ export async function playMachine(
 
       throw new HttpError(
         502,
-        "Nao foi possivel comunicar com a CompactPay agora. Os creditos foram estornados.",
+        "Nao foi possivel comunicar com a CompactPay agora. Os fichas foram estornados.",
       );
     }
 

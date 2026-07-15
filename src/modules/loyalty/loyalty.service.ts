@@ -60,7 +60,7 @@ export async function updateLoyaltyLevel(
     return await prisma.loyaltyLevel.update({ where: { id }, data: input });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new ConflictError("Ja existe um nivel com essa quantidade de creditos");
+      throw new ConflictError("Ja existe um nivel com essa quantidade de fichas");
     }
     throw error;
   }

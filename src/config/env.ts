@@ -82,4 +82,8 @@ if (!parsed.MP_MOCK && !parsed.MP_ACCESS_TOKEN) {
   throw new Error("MP_ACCESS_TOKEN e obrigatorio quando MP_MOCK=false");
 }
 
+if (!parsed.MP_MOCK && parsed.MP_ACCESS_TOKEN?.startsWith("TEST-")) {
+  throw new Error("MP_ACCESS_TOKEN de teste detectado. Em producao use o Access Token real que comeca com APP_USR-");
+}
+
 export const env = parsed;

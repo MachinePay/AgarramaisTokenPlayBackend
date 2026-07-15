@@ -26,4 +26,5 @@ export type MercadoPagoPayment = {
 export interface IMercadoPagoGateway {
   createPreference(params: CreatePreferenceParams): Promise<CreatePreferenceResult>;
   getPayment(paymentId: string): Promise<MercadoPagoPayment | null>;
+  getMerchantOrderPaymentIds(merchantOrderId: string): Promise<string[]>;
 }

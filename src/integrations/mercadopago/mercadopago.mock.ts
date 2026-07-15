@@ -23,4 +23,8 @@ export class MockMercadoPagoGateway implements IMercadoPagoGateway {
   async getPayment(_paymentId: string): Promise<MercadoPagoPayment | null> {
     return null;
   }
+
+  async getMerchantOrderPaymentIds(_merchantOrderId: string): Promise<string[]> {
+    return [];
+  }
 }

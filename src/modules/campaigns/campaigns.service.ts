@@ -143,7 +143,7 @@ export async function getActiveCampaign(now = new Date()) {
 export async function getEffectivePackage(packageId: string) {
   const creditPackage = await prisma.creditPackage.findUnique({ where: { id: packageId } });
   if (!creditPackage || !creditPackage.active) {
-    throw new NotFoundError("Pacote de creditos nao encontrado");
+    throw new NotFoundError("Pacote de fichas nao encontrado");
   }
 
   const campaign = await getActiveCampaign();
