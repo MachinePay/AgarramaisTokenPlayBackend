@@ -4,6 +4,8 @@ import type {
   CreatePreferenceResult,
   IMercadoPagoGateway,
   MercadoPagoPayment,
+  CreatePixPaymentParams,
+  CreatePixPaymentResult,
 } from "./mercadopago.types";
 
 /**
@@ -27,4 +29,14 @@ export class MockMercadoPagoGateway implements IMercadoPagoGateway {
   async getMerchantOrderPaymentIds(_merchantOrderId: string): Promise<string[]> {
     return [];
   }
+
+  async createPixPayment(params: CreatePixPaymentParams): Promise<CreatePixPaymentResult> {
+    return {
+      paymentId: randomUUID(),
+      qrCode: `MOCK-PIX-${params.externalReference}`,
+      qrCodeBase64: "",
+    };
+  }
+
+  async cancelPayment(_paymentId: string): Promise<void> {}
 }

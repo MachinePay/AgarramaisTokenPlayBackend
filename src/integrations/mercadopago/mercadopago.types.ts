@@ -23,8 +23,24 @@ export type MercadoPagoPayment = {
   transactionAmount: number | null;
 };
 
+export type CreatePixPaymentParams = {
+  title: string;
+  amountBrl: number;
+  externalReference: string;
+  payerEmail: string;
+  payerName: string;
+};
+
+export type CreatePixPaymentResult = {
+  paymentId: string;
+  qrCode: string;
+  qrCodeBase64: string;
+};
+
 export interface IMercadoPagoGateway {
   createPreference(params: CreatePreferenceParams): Promise<CreatePreferenceResult>;
+  createPixPayment(params: CreatePixPaymentParams): Promise<CreatePixPaymentResult>;
   getPayment(paymentId: string): Promise<MercadoPagoPayment | null>;
   getMerchantOrderPaymentIds(merchantOrderId: string): Promise<string[]>;
+  cancelPayment(paymentId: string): Promise<void>;
 }

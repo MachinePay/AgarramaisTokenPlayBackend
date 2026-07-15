@@ -77,6 +77,73 @@ export async function checkoutCustomCredits(userId: string, credits: number): Pr
   });
 }
 
+export type PixCheckoutTransaction = Transaction & {
+  pixQrCode: string;
+  pixQrCodeBase64: string;
+};
+
+export async function checkoutPackagePix(userId: string, packageId: string): Promise<PixCheckoutTransaction> {
+  const [user, creditPackage] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    getEffectivePackage(packageId),
+  ]);
+
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  const amountBrl = Number(creditPackage.amountBrl);
+  const creditsAwarded = creditPackage.baseCredits + creditPackage.bonusCredits;
+
+  const transaction = await prisma.transaction.create({
+    data: { userId, packageId, amountBrl, creditsAwarded },
+  });
+
+  const pix = await mercadoPagoGateway.createPixPayment({
+    title: `Agarra Mais - Pacote ${creditPackage.name}`,
+    amountBrl,
+    externalReference: transaction.id,
+    payerEmail: user.email,
+    payerName: user.name,
+  });
+
+  const updated = await prisma.transaction.update({
+    where: { id: transaction.id },
+    data: { mpPaymentId: pix.paymentId },
+  });
+
+  return { ...updated, pixQrCode: pix.qrCode, pixQrCodeBase64: pix.qrCodeBase64 };
+}
+
+export async function checkoutCustomCreditsPix(userId: string, credits: number): Promise<PixCheckoutTransaction> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  const settings = await getAdminSettings();
+  const amountBrl = Number(settings.tokenValueBrl) * credits;
+
+  const transaction = await prisma.transaction.create({
+    data: { userId, amountBrl, creditsAwarded: credits },
+  });
+
+  const pix = await mercadoPagoGateway.createPixPayment({
+    title: `Agarra Mais - ${credits} ficha${credits > 1 ? "s" : ""}`,
+    amountBrl,
+    externalReference: transaction.id,
+    payerEmail: user.email,
+    payerName: user.name,
+  });
+
+  const updated = await prisma.transaction.update({
+    where: { id: transaction.id },
+    data: { mpPaymentId: pix.paymentId },
+  });
+
+  return { ...updated, pixQrCode: pix.qrCode, pixQrCodeBase64: pix.qrCodeBase64 };
+}
+
 export type ConfirmTransactionResult = {
   transactionId: string;
   status: "APPROVED" | "FAILED";
@@ -208,11 +275,13 @@ export async function syncUserTransactionFromMercadoPago(
     throw new NotFoundError("Transacao nao encontrada");
   }
 
-  if (!paymentId || transaction.status !== "PENDING") {
+  const effectivePaymentId = paymentId || transaction.mpPaymentId || undefined;
+
+  if (!effectivePaymentId || transaction.status !== "PENDING") {
     return transaction;
   }
 
-  const payment = await mercadoPagoGateway.getPayment(paymentId);
+  const payment = await mercadoPagoGateway.getPayment(effectivePaymentId);
   if (!payment || payment.externalReference !== transaction.id) {
     return transaction;
   }
@@ -233,6 +302,25 @@ export async function syncUserTransactionFromMercadoPago(
   }
 
   return prisma.transaction.findUniqueOrThrow({ where: { id: transaction.id } });
+}
+
+export async function cancelUserTransaction(userId: string, transactionId: string): Promise<Transaction> {
+  const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  if (!transaction || transaction.userId !== userId) {
+    throw new NotFoundError("Transacao nao encontrada");
+  }
+  if (transaction.status !== "PENDING") {
+    return transaction;
+  }
+
+  if (transaction.mpPaymentId) {
+    await mercadoPagoGateway.cancelPayment(transaction.mpPaymentId);
+  }
+
+  return prisma.transaction.update({
+    where: { id: transaction.id },
+    data: { status: "FAILED" },
+  });
 }
 
 export async function listUserTransactions(userId: string) {

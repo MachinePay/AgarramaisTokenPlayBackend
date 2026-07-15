@@ -2,7 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   checkoutCustomCredits,
+  checkoutCustomCreditsPix,
+  checkoutPackagePix,
   checkoutPackage,
+  cancelUserTransaction,
   confirmTransaction,
   failTransaction,
   getUserTransaction,
@@ -20,6 +23,15 @@ const checkoutBodySchema = z.object({
 const checkoutCustomBodySchema = z.object({
   credits: z.number().int().positive().max(10000),
 });
+
+const checkoutPixBodySchema = z
+  .object({
+    packageId: z.string().uuid().optional(),
+    credits: z.number().int().positive().max(10000).optional(),
+  })
+  .refine((data) => Boolean(data.packageId) !== Boolean(data.credits), {
+    message: "Informe packageId ou credits",
+  });
 
 const transactionParamsSchema = z.object({ id: z.string().uuid() });
 
@@ -54,6 +66,14 @@ export async function transactionsRoutes(app: FastifyInstance) {
     return reply.status(201).send(transaction);
   });
 
+  app.post("/transactions/checkout-pix", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const body = checkoutPixBodySchema.parse(request.body);
+    const transaction = body.packageId
+      ? await checkoutPackagePix(request.user.sub, body.packageId)
+      : await checkoutCustomCreditsPix(request.user.sub, body.credits!);
+    return reply.status(201).send(transaction);
+  });
+
   app.get("/transactions", { onRequest: [app.authenticate] }, async (request, reply) => {
     const transactions = await listUserTransactions(request.user.sub);
     return reply.status(200).send(transactions);
@@ -72,6 +92,12 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const transaction = paymentId
       ? await syncUserTransactionFromMercadoPago(request.user.sub, id, String(paymentId))
       : await getUserTransaction(request.user.sub, id);
+    return reply.status(200).send(transaction);
+  });
+
+  app.post("/transactions/:id/cancel", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const { id } = transactionParamsSchema.parse(request.params);
+    const transaction = await cancelUserTransaction(request.user.sub, id);
     return reply.status(200).send(transaction);
   });
 

@@ -2,6 +2,8 @@ import { prisma } from "../../utils/prisma";
 import { hashPassword } from "../../utils/password";
 import { BadRequestError, NotFoundError } from "../../utils/http-error";
 
+const superAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+
 const adminUserSelect = {
   id: true,
   name: true,
@@ -16,11 +18,20 @@ const adminUserSelect = {
 };
 
 export async function listAdminUsers() {
-  return prisma.user.findMany({
+  const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     take: 100,
     select: adminUserSelect,
   });
+
+  return users.map((user) => ({
+    ...user,
+    protected: isSuperAdminEmail(user.email),
+  }));
+}
+
+function isSuperAdminEmail(email: string): boolean {
+  return Boolean(superAdminEmail && email.trim().toLowerCase() === superAdminEmail);
 }
 
 export async function createAdminUser(input: {
@@ -68,6 +79,10 @@ export async function updateAdminUser(
 
   if (requesterId === userId && (input.status === "BLOCKED" || input.role === "CUSTOMER")) {
     throw new BadRequestError("Voce nao pode remover seu proprio acesso admin");
+  }
+
+  if (isSuperAdminEmail(user.email) && (input.status === "BLOCKED" || input.role === "CUSTOMER")) {
+    throw new BadRequestError("Este e o admin maximo e nao pode ser rebaixado ou bloqueado");
   }
 
   const { password, ...rest } = input;

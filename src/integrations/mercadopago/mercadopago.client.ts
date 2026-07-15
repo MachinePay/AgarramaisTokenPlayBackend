@@ -2,6 +2,8 @@ import { env } from "../../config/env";
 import type {
   CreatePreferenceParams,
   CreatePreferenceResult,
+  CreatePixPaymentParams,
+  CreatePixPaymentResult,
   IMercadoPagoGateway,
   MercadoPagoPayment,
   MercadoPagoPaymentStatus,
@@ -19,6 +21,12 @@ type PaymentResponse = {
   status_detail: string | null;
   external_reference: string | null;
   transaction_amount: number | null;
+  point_of_interaction?: {
+    transaction_data?: {
+      qr_code?: string;
+      qr_code_base64?: string;
+    };
+  };
 };
 
 type MerchantOrderResponse = {
@@ -110,6 +118,48 @@ export class MercadoPagoGateway implements IMercadoPagoGateway {
     };
   }
 
+  async createPixPayment(params: CreatePixPaymentParams): Promise<CreatePixPaymentResult> {
+    const response = await fetch(`${env.MP_API_BASE_URL}/v1/payments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.accessToken}`,
+        "X-Idempotency-Key": `pix-${params.externalReference}`,
+      },
+      body: JSON.stringify({
+        transaction_amount: params.amountBrl,
+        description: params.title,
+        payment_method_id: "pix",
+        external_reference: params.externalReference,
+        notification_url: `${env.BACKEND_PUBLIC_URL.replace(/\/$/, "")}/webhooks/mercadopago`,
+        metadata: { transaction_id: params.externalReference },
+        payer: {
+          email: params.payerEmail,
+          first_name: params.payerName,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Mercado Pago: falha ao criar Pix (${response.status}) ${detail}`);
+    }
+
+    const data = (await response.json()) as PaymentResponse;
+    const qrCode = data.point_of_interaction?.transaction_data?.qr_code;
+    const qrCodeBase64 = data.point_of_interaction?.transaction_data?.qr_code_base64;
+
+    if (!qrCode || !qrCodeBase64) {
+      throw new Error("Mercado Pago: pagamento Pix criado sem QR Code");
+    }
+
+    return {
+      paymentId: String(data.id),
+      qrCode,
+      qrCodeBase64,
+    };
+  }
+
   async getPayment(paymentId: string): Promise<MercadoPagoPayment | null> {
     const response = await fetch(`${env.MP_API_BASE_URL}/v1/payments/${paymentId}`, {
       headers: { Authorization: `Bearer ${this.accessToken}` },
@@ -147,5 +197,23 @@ export class MercadoPagoGateway implements IMercadoPagoGateway {
 
     const data = (await response.json()) as MerchantOrderResponse;
     return (data.payments ?? []).map((payment) => String(payment.id));
+  }
+
+  async cancelPayment(paymentId: string): Promise<void> {
+    const response = await fetch(`${env.MP_API_BASE_URL}/v1/payments/${paymentId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+      body: JSON.stringify({ status: "cancelled" }),
+    });
+
+    if (response.status === 404) return;
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Mercado Pago: falha ao cancelar pagamento (${response.status}) ${detail}`);
+    }
   }
 }
