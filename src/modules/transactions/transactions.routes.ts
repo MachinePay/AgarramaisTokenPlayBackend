@@ -9,6 +9,7 @@ import {
   handleMercadoPagoPaymentUpdate,
   listAdminTransactions,
   listUserTransactions,
+  syncUserTransactionFromMercadoPago,
 } from "./transactions.service";
 
 const checkoutBodySchema = z.object({
@@ -20,6 +21,11 @@ const checkoutCustomBodySchema = z.object({
 });
 
 const transactionParamsSchema = z.object({ id: z.string().uuid() });
+
+const transactionStatusQuerySchema = z.object({
+  payment_id: z.union([z.string(), z.number()]).optional(),
+  collection_id: z.union([z.string(), z.number()]).optional(),
+});
 
 const mercadoPagoWebhookQuerySchema = z.object({
   topic: z.string().optional(),
@@ -58,7 +64,11 @@ export async function transactionsRoutes(app: FastifyInstance) {
   // Usado pelo frontend para dar polling apos o redirect de volta do checkout.
   app.get("/transactions/:id", { onRequest: [app.authenticate] }, async (request, reply) => {
     const { id } = transactionParamsSchema.parse(request.params);
-    const transaction = await getUserTransaction(request.user.sub, id);
+    const query = transactionStatusQuerySchema.parse(request.query);
+    const paymentId = query.payment_id ?? query.collection_id;
+    const transaction = paymentId
+      ? await syncUserTransactionFromMercadoPago(request.user.sub, id, String(paymentId))
+      : await getUserTransaction(request.user.sub, id);
     return reply.status(200).send(transaction);
   });
 

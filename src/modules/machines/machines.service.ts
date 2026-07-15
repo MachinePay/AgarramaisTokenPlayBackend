@@ -7,6 +7,33 @@ export async function listAllMachines() {
   return prisma.machine.findMany({ orderBy: { name: "asc" }, include: { store: true } });
 }
 
+export async function applyCompactPayOnlineStatus<
+  T extends { telemetryId: string; status: "AVAILABLE" | "BUSY" | "MAINTENANCE" },
+>(machines: T[]): Promise<T[]> {
+  if (machines.length === 0) return machines;
+
+  try {
+    const compactPayMachines = await compactPayGateway.listMachines();
+    const onlineByTelemetryId = new Map(
+      compactPayMachines.map((machine) => [machine.telemetryId, machine.online]),
+    );
+
+    return machines.map((machine) => {
+      const online = onlineByTelemetryId.get(machine.telemetryId);
+      if (online === undefined || machine.status === "BUSY") {
+        return machine;
+      }
+
+      return {
+        ...machine,
+        status: online ? "AVAILABLE" : "MAINTENANCE",
+      };
+    });
+  } catch {
+    return machines;
+  }
+}
+
 export async function createMachine(input: {
   storeId: string;
   name: string;

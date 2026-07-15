@@ -34,6 +34,21 @@ export async function listCampaigns() {
   });
 }
 
+export async function listActiveCampaigns(now = new Date()) {
+  return prisma.campaign.findMany({
+    where: {
+      active: true,
+      startsAt: { lte: now },
+      endsAt: { gte: now },
+    },
+    orderBy: { startsAt: "desc" },
+    include: {
+      packageOverrides: { where: { active: true }, include: { package: true }, orderBy: { createdAt: "desc" } },
+      machineOverrides: { include: { machine: { include: { store: true } } }, orderBy: { createdAt: "desc" } },
+    },
+  });
+}
+
 export async function createCampaign(input: CampaignInput) {
   return prisma.campaign.create({
     data: {

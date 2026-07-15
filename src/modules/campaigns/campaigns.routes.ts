@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   createCampaign,
   deleteCampaign,
+  listActiveCampaigns,
   listCampaigns,
   updateCampaign,
   upsertCampaignMachineOverride,
@@ -42,6 +43,11 @@ const campaignUpdateSchema = campaignBodySchema
   .partial();
 
 export async function campaignsAdminRoutes(app: FastifyInstance) {
+  app.get("/campaigns/active", async (_request, reply) => {
+    const campaigns = await listActiveCampaigns();
+    return reply.status(200).send(campaigns);
+  });
+
   app.get("/admin/campaigns", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
     const campaigns = await listCampaigns();
     return reply.status(200).send(campaigns);

@@ -1,6 +1,7 @@
 import type { Prisma, Transaction } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
 import { BadRequestError, ConflictError, NotFoundError } from "../../utils/http-error";
+import { env } from "../../config/env";
 import { mercadoPagoGateway } from "../../integrations/mercadopago";
 import { getEffectivePackage } from "../campaigns/campaigns.service";
 import { getAdminSettings } from "../admin/settings.service";
@@ -120,6 +121,10 @@ async function approveTransaction(
  * conectado (MP_MOCK=true), ja que nesse modo nenhum webhook chega de verdade.
  */
 export async function confirmTransaction(transactionId: string): Promise<ConfirmTransactionResult> {
+  if (!env.MP_MOCK) {
+    throw new BadRequestError("Em producao a compra so pode ser confirmada pelo Mercado Pago");
+  }
+
   return prisma.$transaction(async (tx) => {
     const transaction = await tx.transaction.findUnique({ where: { id: transactionId } });
     if (!transaction) {
@@ -134,6 +139,10 @@ export async function confirmTransaction(transactionId: string): Promise<Confirm
 }
 
 export async function failTransaction(transactionId: string): Promise<ConfirmTransactionResult> {
+  if (!env.MP_MOCK) {
+    throw new BadRequestError("Em producao a falha da compra deve vir do Mercado Pago");
+  }
+
   const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
   if (!transaction) {
     throw new NotFoundError("Transacao nao encontrada");
@@ -182,6 +191,43 @@ export async function handleMercadoPagoPaymentUpdate(paymentId: string): Promise
       data: { status: "FAILED", mpPaymentId: payment.id },
     });
   }
+}
+
+export async function syncUserTransactionFromMercadoPago(
+  userId: string,
+  transactionId: string,
+  paymentId?: string,
+): Promise<Transaction> {
+  const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  if (!transaction || transaction.userId !== userId) {
+    throw new NotFoundError("Transacao nao encontrada");
+  }
+
+  if (!paymentId || transaction.status !== "PENDING") {
+    return transaction;
+  }
+
+  const payment = await mercadoPagoGateway.getPayment(paymentId);
+  if (!payment || payment.externalReference !== transaction.id) {
+    return transaction;
+  }
+
+  if (payment.status === "approved") {
+    await prisma.$transaction(async (tx) => {
+      const locked = await tx.transaction.findUnique({ where: { id: transaction.id } });
+      if (!locked || locked.status !== "PENDING") return;
+      await approveTransaction(tx, locked, payment.id);
+    });
+  }
+
+  if (payment.status === "rejected" || payment.status === "canceled") {
+    await prisma.transaction.updateMany({
+      where: { id: transaction.id, status: "PENDING" },
+      data: { status: "FAILED", mpPaymentId: payment.id },
+    });
+  }
+
+  return prisma.transaction.findUniqueOrThrow({ where: { id: transaction.id } });
 }
 
 export async function listUserTransactions(userId: string) {

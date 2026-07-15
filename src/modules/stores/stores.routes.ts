@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../utils/prisma";
 import { NotFoundError } from "../../utils/http-error";
 import { applyActiveMachineOverrides } from "../campaigns/campaigns.service";
+import { applyCompactPayOnlineStatus } from "../machines/machines.service";
 import { createStore, deleteStore, listActiveStores, listAllStores, updateStore } from "./stores.service";
 
 const storeParamsSchema = z.object({ id: z.string().uuid() });
@@ -37,7 +38,9 @@ export async function storesRoutes(app: FastifyInstance) {
       orderBy: { name: "asc" },
     });
 
-    const effectiveMachines = await applyActiveMachineOverrides(machines);
+    const effectiveMachines = await applyCompactPayOnlineStatus(
+      await applyActiveMachineOverrides(machines),
+    );
 
     return reply.status(200).send(
       effectiveMachines.map((machine) => ({
@@ -61,7 +64,9 @@ export async function storesRoutes(app: FastifyInstance) {
       throw new NotFoundError("Maquina nao encontrada");
     }
 
-    const [effectiveMachine] = await applyActiveMachineOverrides([machine]);
+    const [effectiveMachine] = await applyCompactPayOnlineStatus(
+      await applyActiveMachineOverrides([machine]),
+    );
 
     return reply.status(200).send({
       store: {
