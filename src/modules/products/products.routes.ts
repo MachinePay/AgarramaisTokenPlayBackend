@@ -6,6 +6,7 @@ const priceFieldsSchema = {
   priceCredits: z.number().int().positive().nullable().optional(),
   pricePoints: z.number().int().positive().nullable().optional(),
   priceBrl: z.number().positive().nullable().optional(),
+  cardPriceBrl: z.number().positive().nullable().optional(),
 };
 
 const productBodySchema = z
@@ -16,7 +17,7 @@ const productBodySchema = z
     active: z.boolean().default(true),
     ...priceFieldsSchema,
   })
-  .refine((data) => Boolean(data.priceCredits) || Boolean(data.pricePoints) || Boolean(data.priceBrl), {
+  .refine((data) => Boolean(data.priceCredits) || Boolean(data.pricePoints) || Boolean(data.priceBrl) || Boolean(data.cardPriceBrl), {
     message: "Informe ao menos um preco: fichas, pontos ou reais",
   });
 

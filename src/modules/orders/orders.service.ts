@@ -83,11 +83,12 @@ export async function checkoutProductWithMoney(userId: string, productId: string
   if (!user) {
     throw new NotFoundError("Usuario nao encontrado");
   }
-  if (!product.priceBrl) {
-    throw new BadRequestError("Este produto nao pode ser comprado com dinheiro");
+  const cardPriceBrl = product.cardPriceBrl ?? product.priceBrl;
+  if (!cardPriceBrl) {
+    throw new BadRequestError("Este produto nao pode ser comprado com cartao");
   }
 
-  const amountBrl = Number(product.priceBrl);
+  const amountBrl = Number(cardPriceBrl);
 
   const order = await prisma.productOrder.create({
     data: {

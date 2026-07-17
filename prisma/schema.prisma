@@ -326,6 +326,7 @@ model Product {
   priceCredits Int?     @map("price_credits")
   pricePoints  Int?     @map("price_points")
   priceBrl     Decimal? @map("price_brl") @db.Decimal(10, 2)
+  cardPriceBrl Decimal? @map("card_price_brl") @db.Decimal(10, 2)
   active       Boolean  @default(true)
 
   createdAt DateTime @default(now()) @map("created_at")

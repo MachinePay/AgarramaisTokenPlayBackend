@@ -18,6 +18,7 @@ export async function createProduct(input: {
   priceCredits?: number | null;
   pricePoints?: number | null;
   priceBrl?: number | null;
+  cardPriceBrl?: number | null;
   active?: boolean;
 }) {
   return prisma.product.create({ data: input });
@@ -32,6 +33,7 @@ export async function updateProduct(
     priceCredits: number | null;
     pricePoints: number | null;
     priceBrl: number | null;
+    cardPriceBrl: number | null;
     active: boolean;
   }>,
 ) {
