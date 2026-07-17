@@ -8,6 +8,8 @@ export async function registerUser(input: {
   cpf: string;
   phone?: string;
   password: string;
+  privacyAccepted: true;
+  privacyVersion: string;
 }) {
   const existing = await prisma.user.findFirst({
     where: { OR: [{ email: input.email }, { cpf: input.cpf }] },
@@ -25,6 +27,8 @@ export async function registerUser(input: {
       cpf: input.cpf,
       phone: input.phone,
       passwordHash,
+      privacyAcceptedAt: new Date(),
+      privacyVersion: input.privacyVersion,
     },
   });
 }

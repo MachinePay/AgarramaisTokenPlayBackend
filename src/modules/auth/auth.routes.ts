@@ -8,6 +8,10 @@ const registerBodySchema = z.object({
   cpf: z.string().min(11).max(14),
   phone: z.string().min(8).max(20).optional(),
   password: z.string().min(6),
+  privacyAccepted: z.literal(true, {
+    errorMap: () => ({ message: "Voce precisa aceitar a Politica de Privacidade e os Termos de Uso" }),
+  }),
+  privacyVersion: z.string().min(1).default("2026-07-17"),
 });
 
 const loginBodySchema = z.object({

@@ -58,6 +58,21 @@ enum ProductOrderStatus {
   FAILED
 }
 
+enum PrivacyRequestType {
+  ACCESS
+  CORRECTION
+  DELETION
+  CONSENT_REVOCATION
+  OTHER
+}
+
+enum PrivacyRequestStatus {
+  OPEN
+  IN_REVIEW
+  COMPLETED
+  REJECTED
+}
+
 model User {
   id           String     @id @default(uuid())
   name         String
@@ -67,6 +82,8 @@ model User {
   passwordHash String     @map("password_hash")
   status       UserStatus @default(ACTIVE)
   role         UserRole   @default(CUSTOMER)
+  privacyAcceptedAt DateTime? @map("privacy_accepted_at")
+  privacyVersion    String?   @map("privacy_version")
 
   creditBalance         Int @default(0) @map("credit_balance")
   totalCreditsPurchased Int @default(0) @map("total_credits_purchased")
@@ -79,8 +96,27 @@ model User {
   gameplayLogs GameplayLog[]
   storeFavorites StoreFavorite[]
   productOrders ProductOrder[]
+  privacyRequests PrivacyRequest[]
 
   @@map("users")
+}
+
+model PrivacyRequest {
+  id        String               @id @default(uuid())
+  userId    String               @map("user_id")
+  type      PrivacyRequestType
+  message   String
+  status    PrivacyRequestStatus @default(OPEN)
+  response  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status, createdAt])
+  @@map("privacy_requests")
 }
 
 model Store {

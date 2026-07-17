@@ -7,14 +7,30 @@ const playBodySchema = z.object({
   quantity: z.number().int().positive().max(20).default(1),
 });
 
+const adminGameplayQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  status: z.enum(["SUCCESS", "FAILED"]).optional(),
+  dateFrom: z.coerce.date().optional(),
+  dateTo: z.coerce.date().optional(),
+  storeId: z.string().uuid().optional(),
+  machineId: z.string().uuid().optional(),
+  minCredits: z.coerce.number().int().nonnegative().optional(),
+  maxCredits: z.coerce.number().int().nonnegative().optional(),
+  limit: z.coerce.number().int().positive().max(200).optional(),
+});
+
 export async function gameplayRoutes(app: FastifyInstance) {
   app.get("/gameplay", { onRequest: [app.authenticate] }, async (request, reply) => {
     const logs = await listUserGameplayLogs(request.user.sub);
     return reply.status(200).send(logs);
   });
 
-  app.get("/admin/gameplay", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
-    const logs = await listAdminGameplayLogs();
+  app.get("/admin/gameplay", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const query = adminGameplayQuerySchema.parse(request.query);
+    const logs = await listAdminGameplayLogs({
+      ...query,
+      dateTo: query.dateTo ? new Date(new Date(query.dateTo).setHours(23, 59, 59, 999)) : undefined,
+    });
     return reply.status(200).send(logs);
   });
 

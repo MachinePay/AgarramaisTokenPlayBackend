@@ -1,7 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getUserNavbarSummary } from "../loyalty/loyalty.service";
-import { createAdminUser, grantUserCredits, listAdminUsers, updateAdminUser } from "./users.service";
+import {
+  createAdminUser,
+  createPrivacyRequest,
+  getUserPrivacyData,
+  grantUserCredits,
+  listAdminPrivacyRequests,
+  listAdminUsers,
+  updateAdminUser,
+  updateAdminPrivacyRequest,
+} from "./users.service";
 
 const userParamsSchema = z.object({ id: z.string().uuid() });
 
@@ -29,10 +38,33 @@ const grantCreditsSchema = z.object({
   credits: z.number().int().positive().max(100000),
 });
 
+const privacyRequestSchema = z.object({
+  type: z.enum(["ACCESS", "CORRECTION", "DELETION", "CONSENT_REVOCATION", "OTHER"]),
+  message: z.string().min(10).max(2000),
+});
+
+const privacyRequestParamsSchema = z.object({ id: z.string().uuid() });
+
+const privacyRequestUpdateSchema = z.object({
+  status: z.enum(["OPEN", "IN_REVIEW", "COMPLETED", "REJECTED"]).optional(),
+  response: z.string().max(4000).nullable().optional(),
+});
+
 export async function usersRoutes(app: FastifyInstance) {
   app.get("/users/me", { onRequest: [app.authenticate] }, async (request, reply) => {
     const summary = await getUserNavbarSummary(request.user.sub);
     return reply.status(200).send(summary);
+  });
+
+  app.get("/users/me/privacy", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const data = await getUserPrivacyData(request.user.sub);
+    return reply.status(200).send(data);
+  });
+
+  app.post("/users/me/privacy-requests", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const body = privacyRequestSchema.parse(request.body);
+    const privacyRequest = await createPrivacyRequest(request.user.sub, body);
+    return reply.status(201).send(privacyRequest);
   });
 
   app.get("/admin/users", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
@@ -58,5 +90,17 @@ export async function usersRoutes(app: FastifyInstance) {
     const { credits } = grantCreditsSchema.parse(request.body);
     const user = await grantUserCredits(id, credits);
     return reply.status(200).send(user);
+  });
+
+  app.get("/admin/privacy-requests", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
+    const requests = await listAdminPrivacyRequests();
+    return reply.status(200).send(requests);
+  });
+
+  app.put("/admin/privacy-requests/:id", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const { id } = privacyRequestParamsSchema.parse(request.params);
+    const body = privacyRequestUpdateSchema.parse(request.body);
+    const privacyRequest = await updateAdminPrivacyRequest(id, body);
+    return reply.status(200).send(privacyRequest);
   });
 }

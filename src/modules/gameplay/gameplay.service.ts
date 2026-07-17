@@ -145,10 +145,55 @@ export async function listUserGameplayLogs(userId: string) {
   });
 }
 
-export async function listAdminGameplayLogs() {
+export async function listAdminGameplayLogs(filters: {
+  search?: string;
+  status?: "SUCCESS" | "FAILED";
+  dateFrom?: Date;
+  dateTo?: Date;
+  storeId?: string;
+  machineId?: string;
+  minCredits?: number;
+  maxCredits?: number;
+  limit?: number;
+} = {}) {
+  const search = filters.search?.trim();
+  const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
+
   return prisma.gameplayLog.findMany({
+    where: {
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.machineId ? { machineId: filters.machineId } : {}),
+      ...(filters.minCredits !== undefined || filters.maxCredits !== undefined
+        ? {
+            creditsDebited: {
+              ...(filters.minCredits !== undefined ? { gte: filters.minCredits } : {}),
+              ...(filters.maxCredits !== undefined ? { lte: filters.maxCredits } : {}),
+            },
+          }
+        : {}),
+      ...(filters.dateFrom || filters.dateTo
+        ? {
+            createdAt: {
+              ...(filters.dateFrom ? { gte: filters.dateFrom } : {}),
+              ...(filters.dateTo ? { lte: filters.dateTo } : {}),
+            },
+          }
+        : {}),
+      ...(filters.storeId ? { machine: { storeId: filters.storeId } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { user: { name: { contains: search, mode: "insensitive" } } },
+              { user: { email: { contains: search, mode: "insensitive" } } },
+              { machine: { name: { contains: search, mode: "insensitive" } } },
+              { machine: { telemetryId: { contains: search, mode: "insensitive" } } },
+              { machine: { store: { name: { contains: search, mode: "insensitive" } } } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: limit,
     include: {
       user: {
         select: {
