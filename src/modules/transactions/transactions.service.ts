@@ -25,9 +25,10 @@ export async function checkoutPackage(userId: string, packageId: string): Promis
   }
   const amountBrl = Number(creditPackage.amountBrl);
   const creditsAwarded = creditPackage.baseCredits + creditPackage.bonusCredits;
+  const pointsAwarded = creditPackage.pointsAwarded;
 
   const transaction = await prisma.transaction.create({
-    data: { userId, packageId, amountBrl, creditsAwarded },
+    data: { userId, packageId, amountBrl, creditsAwarded, pointsAwarded },
   });
 
   const preference = await mercadoPagoGateway.createPreference({
@@ -55,9 +56,10 @@ export async function checkoutCustomCredits(userId: string, credits: number): Pr
 
   const settings = await getAdminSettings();
   const amountBrl = Number(settings.tokenValueBrl) * credits;
+  const pointsAwarded = Math.floor(settings.pointsPerCredit * credits);
 
   const transaction = await prisma.transaction.create({
-    data: { userId, amountBrl, creditsAwarded: credits },
+    data: { userId, amountBrl, creditsAwarded: credits, pointsAwarded },
   });
 
   const preference = await mercadoPagoGateway.createPreference({
@@ -94,9 +96,10 @@ export async function checkoutPackagePix(userId: string, packageId: string): Pro
 
   const amountBrl = Number(creditPackage.amountBrl);
   const creditsAwarded = creditPackage.baseCredits + creditPackage.bonusCredits;
+  const pointsAwarded = creditPackage.pointsAwarded;
 
   const transaction = await prisma.transaction.create({
-    data: { userId, packageId, amountBrl, creditsAwarded },
+    data: { userId, packageId, amountBrl, creditsAwarded, pointsAwarded },
   });
 
   const pix = await mercadoPagoGateway.createPixPayment({
@@ -123,9 +126,10 @@ export async function checkoutCustomCreditsPix(userId: string, credits: number):
 
   const settings = await getAdminSettings();
   const amountBrl = Number(settings.tokenValueBrl) * credits;
+  const pointsAwarded = Math.floor(settings.pointsPerCredit * credits);
 
   const transaction = await prisma.transaction.create({
-    data: { userId, amountBrl, creditsAwarded: credits },
+    data: { userId, amountBrl, creditsAwarded: credits, pointsAwarded },
   });
 
   const pix = await mercadoPagoGateway.createPixPayment({
@@ -148,6 +152,7 @@ export type ConfirmTransactionResult = {
   transactionId: string;
   status: "APPROVED" | "FAILED";
   creditsAwarded: number;
+  pointsAwarded: number;
   levelUp: LevelUpResult;
 };
 
@@ -165,6 +170,7 @@ async function approveTransaction(
     data: {
       creditBalance: { increment: transaction.creditsAwarded },
       totalCreditsPurchased: { increment: transaction.creditsAwarded },
+      pointsBalance: { increment: transaction.pointsAwarded },
     },
   });
 
@@ -179,6 +185,7 @@ async function approveTransaction(
     transactionId: transaction.id,
     status: "APPROVED",
     creditsAwarded: transaction.creditsAwarded,
+    pointsAwarded: transaction.pointsAwarded,
     levelUp,
   };
 }
@@ -224,7 +231,8 @@ export async function failTransaction(transactionId: string): Promise<ConfirmTra
     transactionId,
     status: "FAILED",
     creditsAwarded: 0,
-    levelUp: { bonusCreditsGranted: 0, levelsReached: [] },
+    pointsAwarded: 0,
+    levelUp: { bonusCreditsGranted: 0, pointsGranted: 0, levelsReached: [] },
   };
 }
 

@@ -8,6 +8,7 @@ type TransactionClient = Prisma.TransactionClient;
 export type UserNavbarSummary = {
   name: string;
   creditBalance: number;
+  pointsBalance: number;
   currentLevelName: string | null;
   nextLevelName: string | null;
   progressPercentage: number;
@@ -32,6 +33,7 @@ export async function getUserNavbarSummary(userId: string): Promise<UserNavbarSu
   return {
     name: user.name,
     creditBalance: user.creditBalance,
+    pointsBalance: user.pointsBalance,
     currentLevelName: progress.currentLevelName,
     nextLevelName: progress.nextLevelName,
     progressPercentage: progress.progressPercentage,
@@ -42,6 +44,7 @@ export async function createLoyaltyLevel(input: {
   levelName: string;
   requiredCredits: number;
   bonusCreditsReward: number;
+  pointsAwarded: number;
   status?: "ACTIVE" | "DRAFT";
 }) {
   return prisma.loyaltyLevel.create({ data: input });
@@ -53,6 +56,7 @@ export async function updateLoyaltyLevel(
     levelName: string;
     requiredCredits: number;
     bonusCreditsReward: number;
+    pointsAwarded: number;
     status: "ACTIVE" | "DRAFT";
   }>,
 ) {
@@ -76,12 +80,13 @@ export async function listLoyaltyLevels() {
 
 export type LevelUpResult = {
   bonusCreditsGranted: number;
+  pointsGranted: number;
   levelsReached: string[];
 };
 
 /**
  * Ao registrar uma compra aprovada, verifica quais niveis o usuario cruzou
- * (comparando total antes/depois) e credita a soma dos bonus de cada um.
+ * (comparando total antes/depois) e credita a soma dos bonus e pontos de cada um.
  * Deve ser chamada dentro da mesma transacao Prisma que aprova a compra.
  */
 export async function applyLevelUpBonuses(
@@ -97,16 +102,21 @@ export async function applyLevelUpBonuses(
     (sum, level) => sum + level.bonusCreditsReward,
     0,
   );
+  const pointsGranted = crossedLevels.reduce((sum, level) => sum + level.pointsAwarded, 0);
 
-  if (bonusCreditsGranted > 0) {
+  if (bonusCreditsGranted > 0 || pointsGranted > 0) {
     await tx.user.update({
       where: { id: userId },
-      data: { creditBalance: { increment: bonusCreditsGranted } },
+      data: {
+        creditBalance: { increment: bonusCreditsGranted },
+        pointsBalance: { increment: pointsGranted },
+      },
     });
   }
 
   return {
     bonusCreditsGranted,
+    pointsGranted,
     levelsReached: crossedLevels.map((level) => level.levelName),
   };
 }

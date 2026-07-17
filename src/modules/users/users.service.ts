@@ -14,6 +14,7 @@ const adminUserSelect = {
   role: true,
   creditBalance: true,
   totalCreditsPurchased: true,
+  pointsBalance: true,
   createdAt: true,
 };
 

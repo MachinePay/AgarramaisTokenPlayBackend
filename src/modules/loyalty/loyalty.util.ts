@@ -3,6 +3,7 @@ export type LoyaltyLevelInput = {
   levelName: string;
   requiredCredits: number;
   bonusCreditsReward: number;
+  pointsAwarded: number;
 };
 
 export type LoyaltyProgress = {

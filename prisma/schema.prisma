@@ -56,6 +56,7 @@ model User {
 
   creditBalance         Int @default(0) @map("credit_balance")
   totalCreditsPurchased Int @default(0) @map("total_credits_purchased")
+  pointsBalance         Int @default(0) @map("points_balance")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -124,6 +125,7 @@ model LoyaltyLevel {
   levelName          String             @map("level_name")
   requiredCredits    Int                @map("required_credits")
   bonusCreditsReward Int                @default(0) @map("bonus_credits_reward")
+  pointsAwarded      Int                @default(0) @map("points_awarded")
   status             LoyaltyLevelStatus @default(ACTIVE)
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -139,6 +141,7 @@ model CreditPackage {
   amountBrl    Decimal @map("amount_brl") @db.Decimal(10, 2)
   baseCredits  Int     @map("base_credits")
   bonusCredits Int     @default(0) @map("bonus_credits")
+  pointsAwarded Int    @default(0) @map("points_awarded")
   isPopular    Boolean @default(false) @map("is_popular")
   showOnHome   Boolean @default(false) @map("show_on_home")
   active       Boolean @default(true)
@@ -226,6 +229,7 @@ model Transaction {
   packageId      String?           @map("package_id")
   amountBrl      Decimal           @map("amount_brl") @db.Decimal(10, 2)
   creditsAwarded Int               @map("credits_awarded")
+  pointsAwarded  Int               @default(0) @map("points_awarded")
   status         TransactionStatus @default(PENDING)
 
   // Checkout Pro do Mercado Pago: o usuario paga com cartao OU Pix na pagina

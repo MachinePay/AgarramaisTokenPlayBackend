@@ -30,6 +30,7 @@ export async function createPackage(input: {
   amountBrl: number;
   baseCredits: number;
   bonusCredits: number;
+  pointsAwarded: number;
   isPopular?: boolean;
   showOnHome?: boolean;
   active?: boolean;
@@ -44,6 +45,7 @@ export async function updatePackage(
     amountBrl: number;
     baseCredits: number;
     bonusCredits: number;
+    pointsAwarded: number;
     isPopular: boolean;
     showOnHome: boolean;
     active: boolean;

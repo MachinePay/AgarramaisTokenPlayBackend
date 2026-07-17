@@ -14,6 +14,7 @@ const packageBodySchema = z.object({
   amountBrl: z.number().positive(),
   baseCredits: z.number().int().positive(),
   bonusCredits: z.number().int().nonnegative().default(0),
+  pointsAwarded: z.number().int().nonnegative().default(0),
   isPopular: z.boolean().default(false),
   showOnHome: z.boolean().default(false),
   active: z.boolean().default(true),

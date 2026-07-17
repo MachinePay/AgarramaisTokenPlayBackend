@@ -6,6 +6,7 @@ const settingsBodySchema = z.object({
   tokenBundleAmountBrl: z.number().positive().optional(),
   tokenBundleCredits: z.number().int().positive().optional(),
   tokenValueBrl: z.number().positive().optional(),
+  pointsPerCredit: z.number().nonnegative().optional(),
 });
 
 export async function settingsAdminRoutes(app: FastifyInstance) {

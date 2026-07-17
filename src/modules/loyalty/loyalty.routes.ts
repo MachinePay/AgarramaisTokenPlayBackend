@@ -6,6 +6,7 @@ const levelBodySchema = z.object({
   levelName: z.string().min(2),
   requiredCredits: z.number().int().nonnegative(),
   bonusCreditsReward: z.number().int().nonnegative().default(0),
+  pointsAwarded: z.number().int().nonnegative().default(0),
   status: z.enum(["ACTIVE", "DRAFT"]).default("ACTIVE"),
 });
 
