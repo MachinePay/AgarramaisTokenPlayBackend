@@ -16,6 +16,8 @@ import { dashboardAdminRoutes } from "./modules/admin/dashboard.routes";
 import { settingsAdminRoutes } from "./modules/admin/settings.routes";
 import { reportsAdminRoutes } from "./modules/admin/reports.routes";
 import { campaignsAdminRoutes } from "./modules/campaigns/campaigns.routes";
+import { productsRoutes } from "./modules/products/products.routes";
+import { ordersRoutes } from "./modules/orders/orders.routes";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -35,6 +37,8 @@ export function buildApp() {
   app.register(settingsAdminRoutes);
   app.register(reportsAdminRoutes);
   app.register(campaignsAdminRoutes);
+  app.register(productsRoutes);
+  app.register(ordersRoutes);
 
   app.get("/health", async () => ({ status: "ok" }));
 

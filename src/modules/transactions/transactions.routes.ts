@@ -15,6 +15,10 @@ import {
   listUserTransactions,
   syncUserTransactionFromMercadoPago,
 } from "./transactions.service";
+import {
+  handleMercadoPagoMerchantOrderUpdateForOrders,
+  handleMercadoPagoPaymentUpdateForOrders,
+} from "../orders/orders.service";
 
 const checkoutBodySchema = z.object({
   packageId: z.string().uuid(),
@@ -111,12 +115,21 @@ export async function transactionsRoutes(app: FastifyInstance) {
     if (!resourceId) return;
 
     if (topic.includes("merchant_order")) {
-      await handleMercadoPagoMerchantOrderUpdate(resourceId);
+      await Promise.all([
+        handleMercadoPagoMerchantOrderUpdate(resourceId),
+        handleMercadoPagoMerchantOrderUpdateForOrders(resourceId),
+      ]);
       return;
     }
 
     if (topic.includes("payment")) {
-      await handleMercadoPagoPaymentUpdate(resourceId);
+      // Um pagamento pode ser de uma compra de fichas (Transaction) ou de um
+      // pedido de produto (ProductOrder) - cada handler ignora silenciosamente
+      // se o external_reference nao pertencer a sua tabela.
+      await Promise.all([
+        handleMercadoPagoPaymentUpdate(resourceId),
+        handleMercadoPagoPaymentUpdateForOrders(resourceId),
+      ]);
     }
   }
 

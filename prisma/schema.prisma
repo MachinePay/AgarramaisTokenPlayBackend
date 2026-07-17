@@ -44,6 +44,20 @@ enum LoyaltyLevelStatus {
   DRAFT
 }
 
+enum ProductOrderPaymentMethod {
+  CREDITS
+  POINTS
+  MONEY
+}
+
+enum ProductOrderStatus {
+  PENDING_PAYMENT
+  AWAITING_DELIVERY
+  DELIVERED
+  CANCELED
+  FAILED
+}
+
 model User {
   id           String     @id @default(uuid())
   name         String
@@ -64,6 +78,7 @@ model User {
   transactions Transaction[]
   gameplayLogs GameplayLog[]
   storeFavorites StoreFavorite[]
+  productOrders ProductOrder[]
 
   @@map("users")
 }
@@ -265,4 +280,51 @@ model GameplayLog {
   @@index([userId])
   @@index([machineId])
   @@map("gameplay_logs")
+}
+
+model Product {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  imageUrl     String?  @map("image_url")
+  priceCredits Int?     @map("price_credits")
+  pricePoints  Int?     @map("price_points")
+  priceBrl     Decimal? @map("price_brl") @db.Decimal(10, 2)
+  active       Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  orders ProductOrder[]
+
+  @@map("products")
+}
+
+model ProductOrder {
+  id            String                    @id @default(uuid())
+  userId        String                    @map("user_id")
+  productId     String                    @map("product_id")
+  productName   String                    @map("product_name")
+  paymentMethod ProductOrderPaymentMethod @map("payment_method")
+  creditsSpent  Int                       @default(0) @map("credits_spent")
+  pointsSpent   Int                       @default(0) @map("points_spent")
+  amountBrl     Decimal?                  @map("amount_brl") @db.Decimal(10, 2)
+  status        ProductOrderStatus        @default(AWAITING_DELIVERY)
+
+  checkoutUrl    String? @map("checkout_url")
+  mpPreferenceId String? @map("mp_preference_id")
+  mpPaymentId    String? @map("mp_payment_id")
+
+  deliveredAt DateTime? @map("delivered_at")
+  canceledAt  DateTime? @map("canceled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("product_orders")
 }
