@@ -3,6 +3,7 @@ import { hashPassword } from "../../utils/password";
 import { BadRequestError, NotFoundError } from "../../utils/http-error";
 
 const superAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+const CURRENT_PRIVACY_VERSION = "2026-07-17";
 
 const adminUserSelect = {
   id: true,
@@ -193,6 +194,42 @@ export async function getUserPrivacyData(userId: string) {
       "Exportacao resumida para apoio aos direitos do titular. Historicos extensos podem exigir atendimento manual.",
     user,
   };
+}
+
+export async function getUserPrivacyStatus(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { privacyAcceptedAt: true, privacyVersion: true },
+  });
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  return {
+    privacyAcceptedAt: user.privacyAcceptedAt,
+    privacyVersion: user.privacyVersion,
+    requiredVersion: CURRENT_PRIVACY_VERSION,
+    acceptanceRequired: user.privacyVersion !== CURRENT_PRIVACY_VERSION || !user.privacyAcceptedAt,
+  };
+}
+
+export async function acceptCurrentPrivacyPolicy(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      privacyAcceptedAt: new Date(),
+      privacyVersion: CURRENT_PRIVACY_VERSION,
+    },
+    select: {
+      privacyAcceptedAt: true,
+      privacyVersion: true,
+    },
+  });
 }
 
 export async function createPrivacyRequest(

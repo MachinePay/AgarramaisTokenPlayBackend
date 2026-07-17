@@ -3,7 +3,9 @@ import { z } from "zod";
 import { getUserNavbarSummary } from "../loyalty/loyalty.service";
 import {
   createAdminUser,
+  acceptCurrentPrivacyPolicy,
   createPrivacyRequest,
+  getUserPrivacyStatus,
   getUserPrivacyData,
   grantUserCredits,
   listAdminPrivacyRequests,
@@ -58,6 +60,16 @@ export async function usersRoutes(app: FastifyInstance) {
 
   app.get("/users/me/privacy", { onRequest: [app.authenticate] }, async (request, reply) => {
     const data = await getUserPrivacyData(request.user.sub);
+    return reply.status(200).send(data);
+  });
+
+  app.get("/users/me/privacy-status", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const data = await getUserPrivacyStatus(request.user.sub);
+    return reply.status(200).send(data);
+  });
+
+  app.post("/users/me/privacy-acceptance", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const data = await acceptCurrentPrivacyPolicy(request.user.sub);
     return reply.status(200).send(data);
   });
 
