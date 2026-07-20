@@ -3,6 +3,10 @@ import { prisma } from "../../utils/prisma";
 type DateRange = {
   dateFrom?: string;
   dateTo?: string;
+  storeId?: string;
+  machineId?: string;
+  transactionStatus?: "PENDING" | "APPROVED" | "FAILED";
+  gameplayStatus?: "SUCCESS" | "FAILED";
 };
 
 type RankingItem = {
@@ -67,6 +71,7 @@ export async function getOperationsReport(input: DateRange) {
     prisma.transaction.findMany({
       where: {
         createdAt: { gte: from, lte: to },
+        ...(input.transactionStatus ? { status: input.transactionStatus } : {}),
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
@@ -77,6 +82,9 @@ export async function getOperationsReport(input: DateRange) {
     prisma.gameplayLog.findMany({
       where: {
         createdAt: { gte: from, lte: to },
+        ...(input.gameplayStatus ? { status: input.gameplayStatus } : {}),
+        ...(input.machineId ? { machineId: input.machineId } : {}),
+        ...(input.storeId ? { machine: { storeId: input.storeId } } : {}),
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
