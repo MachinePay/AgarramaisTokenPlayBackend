@@ -5,6 +5,7 @@ import {
   createAdminUser,
   acceptCurrentPrivacyPolicy,
   createPrivacyRequest,
+  getUserProfile,
   getUserPrivacyStatus,
   getUserPrivacyData,
   grantUserCredits,
@@ -12,6 +13,7 @@ import {
   listAdminUsers,
   updateAdminUser,
   updateAdminPrivacyRequest,
+  updateUserProfile,
 } from "./users.service";
 
 const userParamsSchema = z.object({ id: z.string().uuid() });
@@ -36,6 +38,27 @@ const userCreateSchema = z.object({
   role: z.enum(["CUSTOMER", "ADMIN"]).default("CUSTOMER"),
 });
 
+const nullableTrimmedString = z
+  .string()
+  .trim()
+  .transform((value) => (value.length > 0 ? value : null))
+  .nullable()
+  .optional();
+
+const userProfileUpdateSchema = z.object({
+  name: z.string().trim().min(2).optional(),
+  email: z.string().trim().email().optional(),
+  cpf: z.string().trim().min(11).max(14).optional(),
+  phone: nullableTrimmedString,
+  addressZipCode: nullableTrimmedString,
+  addressStreet: nullableTrimmedString,
+  addressNumber: nullableTrimmedString,
+  addressComplement: nullableTrimmedString,
+  addressNeighborhood: nullableTrimmedString,
+  addressCity: nullableTrimmedString,
+  addressState: nullableTrimmedString,
+});
+
 const grantCreditsSchema = z.object({
   credits: z.number().int().positive().max(100000),
 });
@@ -56,6 +79,17 @@ export async function usersRoutes(app: FastifyInstance) {
   app.get("/users/me", { onRequest: [app.authenticate] }, async (request, reply) => {
     const summary = await getUserNavbarSummary(request.user.sub);
     return reply.status(200).send(summary);
+  });
+
+  app.get("/users/me/profile", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const profile = await getUserProfile(request.user.sub);
+    return reply.status(200).send(profile);
+  });
+
+  app.put("/users/me/profile", { onRequest: [app.authenticate] }, async (request, reply) => {
+    const body = userProfileUpdateSchema.parse(request.body);
+    const profile = await updateUserProfile(request.user.sub, body);
+    return reply.status(200).send(profile);
   });
 
   app.get("/users/me/privacy", { onRequest: [app.authenticate] }, async (request, reply) => {

@@ -19,6 +19,21 @@ const adminUserSelect = {
   createdAt: true,
 };
 
+const userProfileSelect = {
+  id: true,
+  name: true,
+  email: true,
+  cpf: true,
+  phone: true,
+  addressZipCode: true,
+  addressStreet: true,
+  addressNumber: true,
+  addressComplement: true,
+  addressNeighborhood: true,
+  addressCity: true,
+  addressState: true,
+};
+
 export async function listAdminUsers() {
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -30,6 +45,47 @@ export async function listAdminUsers() {
     ...user,
     protected: isSuperAdminEmail(user.email),
   }));
+}
+
+export async function getUserProfile(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: userProfileSelect,
+  });
+
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  return user;
+}
+
+export async function updateUserProfile(
+  userId: string,
+  input: Partial<{
+    name: string;
+    email: string;
+    cpf: string;
+    phone: string | null;
+    addressZipCode: string | null;
+    addressStreet: string | null;
+    addressNumber: string | null;
+    addressComplement: string | null;
+    addressNeighborhood: string | null;
+    addressCity: string | null;
+    addressState: string | null;
+  }>,
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) {
+    throw new NotFoundError("Usuario nao encontrado");
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: input,
+    select: userProfileSelect,
+  });
 }
 
 function isSuperAdminEmail(email: string): boolean {
