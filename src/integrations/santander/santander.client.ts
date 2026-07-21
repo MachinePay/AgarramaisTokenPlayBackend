@@ -287,7 +287,6 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         headers: {
           Authorization: `Bearer ${pixJwt}`,
           Token: pixJwt,
-          "X-Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body).toString(),
         },
@@ -335,7 +334,6 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         headers: {
           Authorization: `Bearer ${pixJwt}`,
           Token: pixJwt,
-          "X-Authorization": `Bearer ${token}`,
         },
         config,
       });
