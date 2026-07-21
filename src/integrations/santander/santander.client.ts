@@ -57,6 +57,11 @@ function isUnsupportedMethodError(error: unknown): boolean {
   return message.includes("Unsupported Request") || message.includes("not supported");
 }
 
+function isJwtAlgorithmMismatchError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return message.includes("AlgorithmMismatch") || message.includes("Algorithm in header");
+}
+
 function buildTxId(externalReference: string): string {
   const normalized = externalReference.replace(/[^A-Za-z0-9]/g, "");
   if (normalized.length >= 26 && normalized.length <= 35) return normalized;
@@ -262,6 +267,43 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
     throw new BadRequestError(message || fallback);
   }
 
+  private async requestPixCharge(
+    request: Omit<HttpRequestOptions, "method" | "headers"> & {
+      headers: Record<string, string>;
+    },
+    pixJwt: string,
+  ): Promise<SantanderChargeResponse> {
+    const jwtVariants: Array<{ name: string; headers: Record<string, string> }> = [
+      { name: "authorization-bearer-token-raw", headers: { Authorization: `Bearer ${pixJwt}`, Token: pixJwt } },
+      { name: "token-bearer", headers: { Token: `Bearer ${pixJwt}` } },
+      { name: "token-raw", headers: { Token: pixJwt } },
+      { name: "authorization-bearer", headers: { Authorization: `Bearer ${pixJwt}` } },
+      { name: "authorization-raw", headers: { Authorization: pixJwt } },
+    ];
+
+    let lastError: unknown = null;
+    for (const variant of jwtVariants) {
+      const headers = { ...request.headers, ...variant.headers };
+      try {
+        return await requestJson<SantanderChargeResponse>({ ...request, method: "PUT", headers });
+      } catch (error) {
+        if (isUnsupportedMethodError(error)) {
+          try {
+            return await requestJson<SantanderChargeResponse>({ ...request, method: "POST", headers });
+          } catch (postError) {
+            lastError = postError;
+            if (!isJwtAlgorithmMismatchError(postError)) throw postError;
+          }
+          continue;
+        }
+        lastError = error;
+        if (!isJwtAlgorithmMismatchError(error)) throw error;
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error("Santander: falha ao autenticar JWT Pix");
+  }
+
   async createPixPayment(params: CreatePixPaymentParams): Promise<CreatePixPaymentResult> {
     try {
       const config = await this.getConfig();
@@ -285,8 +327,6 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         url: buildPixChargeUrl(config, txid),
         label: "criacao de cobranca Pix",
         headers: {
-          Authorization: `Bearer ${pixJwt}`,
-          Token: pixJwt,
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body).toString(),
         },
@@ -294,13 +334,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         config,
       };
 
-      let data: SantanderChargeResponse;
-      try {
-        data = await requestJson<SantanderChargeResponse>({ ...request, method: "PUT" });
-      } catch (error) {
-        if (!isUnsupportedMethodError(error)) throw error;
-        data = await requestJson<SantanderChargeResponse>({ ...request, method: "POST" });
-      }
+      const data = await this.requestPixCharge(request, pixJwt);
 
       const qrCode = data.pixCopiaECola ?? data.copiaECola ?? data.qrcode ?? data.qrCode;
       if (!qrCode) {
