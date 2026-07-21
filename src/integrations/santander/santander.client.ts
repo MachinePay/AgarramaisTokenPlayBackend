@@ -2,6 +2,7 @@ import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { URL } from "node:url";
 import { createSign, randomUUID } from "node:crypto";
+import forge from "node-forge";
 import { BadRequestError, HttpError } from "../../utils/http-error";
 import { getSantanderPaymentSettings, type SantanderPaymentSettings } from "../../modules/admin/settings.service";
 import type {
@@ -79,8 +80,27 @@ function base64Url(input: string): string {
   return Buffer.from(input).toString("base64url");
 }
 
+function extractPrivateKeyFromPfx(config: SantanderPaymentSettings): string {
+  if (!config.pfxBase64) return "";
+  try {
+    const pfxDer = forge.util.decode64(config.pfxBase64);
+    const pfxAsn1 = forge.asn1.fromDer(pfxDer);
+    const p12 = forge.pkcs12.pkcs12FromAsn1(pfxAsn1, false, config.pfxPassphrase || "");
+    const shroudedBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [];
+    const keyBags = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] ?? [];
+    const bags = [...shroudedBags, ...keyBags].filter(Boolean);
+    const key = bags.find((bag) => bag.key)?.key;
+    return key ? forge.pki.privateKeyToPem(key) : "";
+  } catch {
+    throw new BadRequestError("Nao foi possivel ler o PFX/P12 Santander. Verifique se a senha do arquivo esta correta.");
+  }
+}
+
 function buildRs256Jwt(config: SantanderPaymentSettings): string | null {
-  const privateKey = config.privateKeyPem || (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "");
+  const privateKey =
+    config.privateKeyPem ||
+    (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "") ||
+    extractPrivateKeyFromPfx(config);
   if (!privateKey) return null;
   if (!/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(privateKey)) {
     throw new BadRequestError(
