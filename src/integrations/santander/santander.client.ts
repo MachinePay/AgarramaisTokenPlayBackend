@@ -276,12 +276,17 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
       });
 
       const pixJwt = buildRs256Jwt(config);
+      if (!pixJwt) {
+        throw new BadRequestError(
+          "Nao foi possivel gerar o JWT RS256 do Santander. Salve o PFX/P12 original com a senha correta no setor financeiro.",
+        );
+      }
       const request = {
         url: buildPixChargeUrl(config, txid),
         label: "criacao de cobranca Pix",
         headers: {
-          Authorization: `Bearer ${pixJwt ?? token}`,
-          ...(pixJwt ? { Token: pixJwt, "X-Authorization": `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
+          Token: pixJwt,
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body).toString(),
         },
@@ -321,7 +326,14 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         url: buildPixChargeUrl(config, txid),
         label: "consulta de cobranca Pix",
         headers: {
-          Authorization: `Bearer ${buildRs256Jwt(config) ?? token}`,
+          Authorization: `Bearer ${token}`,
+          Token:
+            buildRs256Jwt(config) ??
+            (() => {
+              throw new BadRequestError(
+                "Nao foi possivel gerar o JWT RS256 do Santander. Salve o PFX/P12 original com a senha correta no setor financeiro.",
+              );
+            })(),
         },
         config,
       });
