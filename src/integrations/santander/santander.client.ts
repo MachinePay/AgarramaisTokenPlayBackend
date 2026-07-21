@@ -87,7 +87,12 @@ async function requestJson<T>({ method, url, headers = {}, body, config, label }
               cert: config.certificatePem,
               key: config.privateKeyPem,
             }
-          : {}),
+          : config?.certificatePem && config.certificatePem.includes("PRIVATE KEY")
+            ? {
+                cert: config.certificatePem,
+                key: config.certificatePem,
+              }
+            : {}),
       },
       (response) => {
         const chunks: Buffer[] = [];
@@ -124,6 +129,11 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
     const config = await getSantanderPaymentSettings();
     if (!config.clientId || !config.clientSecret || !config.pixKey) {
       throw new BadRequestError("Configure Client ID, Client Secret e Chave Pix do Santander no setor financeiro");
+    }
+    if (!config.certificatePem) {
+      throw new BadRequestError(
+        "Configure o certificado digital do Santander no setor financeiro. O OAuth Santander exige o certificado cadastrado no portal.",
+      );
     }
     return config;
   }
