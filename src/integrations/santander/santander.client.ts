@@ -51,6 +51,11 @@ function buildPixChargeUrl(config: SantanderPaymentSettings, txid: string): stri
   return `${normalizeBaseUrl(config.pixBaseUrl)}/cob/${txid}`;
 }
 
+function isUnsupportedMethodError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return message.includes("Unsupported Request") || message.includes("not supported");
+}
+
 function buildTxId(externalReference: string): string {
   const normalized = externalReference.replace(/[^A-Za-z0-9]/g, "");
   if (normalized.length >= 26 && normalized.length <= 35) return normalized;
@@ -208,8 +213,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         infoAdicionais: [{ nome: "Referencia", valor: params.externalReference }],
       });
 
-      const data = await requestJson<SantanderChargeResponse>({
-        method: "PUT",
+      const chargeRequest = {
         url: buildPixChargeUrl(config, txid),
         label: "criacao de cobranca Pix",
         headers: {
@@ -219,7 +223,15 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         },
         body,
         config,
-      });
+      };
+
+      let data: SantanderChargeResponse;
+      try {
+        data = await requestJson<SantanderChargeResponse>({ ...chargeRequest, method: "PUT" });
+      } catch (error) {
+        if (!isUnsupportedMethodError(error)) throw error;
+        data = await requestJson<SantanderChargeResponse>({ ...chargeRequest, method: "POST" });
+      }
 
       const qrCode = data.pixCopiaECola ?? data.copiaECola ?? data.qrcode ?? data.qrCode;
       if (!qrCode) {
