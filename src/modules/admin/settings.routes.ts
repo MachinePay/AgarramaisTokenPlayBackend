@@ -10,6 +10,7 @@ const settingsBodySchema = z.object({
   paymentProvider: z.enum(["MERCADO_PAGO", "SANTANDER"]).optional(),
   santanderEnvironment: z.enum(["SANDBOX", "PRODUCTION"]).optional(),
   santanderBaseUrl: z.string().url().optional(),
+  santanderPixBaseUrl: z.string().url().optional(),
   santanderClientId: z.string().optional(),
   santanderClientSecret: z.string().optional(),
   santanderCertificatePem: z.string().optional(),

@@ -47,6 +47,10 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/$/, "");
 }
 
+function buildPixChargeUrl(config: SantanderPaymentSettings, txid: string): string {
+  return `${normalizeBaseUrl(config.pixBaseUrl)}/cob/${txid}`;
+}
+
 function buildTxId(externalReference: string): string {
   const normalized = externalReference.replace(/[^A-Za-z0-9]/g, "");
   if (normalized.length >= 26 && normalized.length <= 35) return normalized;
@@ -206,7 +210,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
 
       const data = await requestJson<SantanderChargeResponse>({
         method: "PUT",
-        url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
+        url: buildPixChargeUrl(config, txid),
         label: "criacao de cobranca Pix",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -238,7 +242,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
       const token = await this.getAccessToken(config);
       const data = await requestJson<SantanderChargeResponse>({
         method: "GET",
-        url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
+        url: buildPixChargeUrl(config, txid),
         label: "consulta de cobranca Pix",
         headers: { Authorization: `Bearer ${token}` },
         config,
