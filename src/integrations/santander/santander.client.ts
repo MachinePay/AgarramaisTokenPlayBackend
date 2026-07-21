@@ -96,29 +96,50 @@ function extractPrivateKeyFromPfx(config: SantanderPaymentSettings): string {
   }
 }
 
-function buildClientAssertionJwt(config: SantanderPaymentSettings, tokenUrl: string): string | null {
-  const privateKey =
+function resolvePrivateKeyPem(config: SantanderPaymentSettings): string {
+  return (
     extractPrivateKeyFromPfx(config) ||
     config.privateKeyPem ||
     (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "") ||
-    "";
+    ""
+  );
+}
+
+function signRs256Jwt(config: SantanderPaymentSettings, claims: Record<string, unknown>): string | null {
+  const privateKey = resolvePrivateKeyPem(config);
   if (!privateKey) return null;
 
-  const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
-  const payload = {
+  const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(claims))}`;
+  const signature = createSign("RSA-SHA256")
+    .update(signingInput)
+    .sign(config.pfxPassphrase ? { key: privateKey, passphrase: config.pfxPassphrase } : privateKey, "base64url");
+  return `${signingInput}.${signature}`;
+}
+
+function buildClientAssertionJwt(config: SantanderPaymentSettings, tokenUrl: string): string | null {
+  const now = Math.floor(Date.now() / 1000);
+  return signRs256Jwt(config, {
     iss: config.clientId,
     sub: config.clientId,
     aud: tokenUrl,
     iat: now,
     exp: now + 300,
     jti: randomUUID(),
-  };
-  const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
-  const signature = createSign("RSA-SHA256")
-    .update(signingInput)
-    .sign(config.pfxPassphrase ? { key: privateKey, passphrase: config.pfxPassphrase } : privateKey, "base64url");
-  return `${signingInput}.${signature}`;
+  });
+}
+
+function buildPixTokenHeaderJwt(config: SantanderPaymentSettings): string | null {
+  const now = Math.floor(Date.now() / 1000);
+  return signRs256Jwt(config, {
+    iss: config.clientId,
+    sub: config.clientId,
+    aud: normalizeBaseUrl(config.pixBaseUrl),
+    iat: now,
+    nbf: now - 10,
+    exp: now + 300,
+    jti: randomUUID(),
+  });
 }
 
 function buildCertificateOptions(config?: SantanderPaymentSettings) {
@@ -268,11 +289,13 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         infoAdicionais: [{ nome: "Referencia", valor: params.externalReference }],
       });
 
+      const pixTokenJwt = buildPixTokenHeaderJwt(config);
       const chargeRequest = {
         url: buildPixChargeUrl(config, txid),
         label: "criacao de cobranca Pix",
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(pixTokenJwt ? { Token: pixTokenJwt } : {}),
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body).toString(),
         },
@@ -307,12 +330,14 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
     try {
       const config = await this.getConfig();
       const token = await this.getAccessToken(config);
+      const pixTokenJwt = buildPixTokenHeaderJwt(config);
       const data = await requestJson<SantanderChargeResponse>({
         method: "GET",
         url: buildPixChargeUrl(config, txid),
         label: "consulta de cobranca Pix",
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(pixTokenJwt ? { Token: pixTokenJwt } : {}),
         },
         config,
       });
