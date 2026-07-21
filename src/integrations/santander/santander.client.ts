@@ -40,6 +40,7 @@ type HttpRequestOptions = {
   headers?: Record<string, string>;
   body?: string;
   config?: SantanderPaymentSettings;
+  label: string;
 };
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -65,7 +66,7 @@ function stripDataImagePrefix(value: string | undefined): string {
   return value?.replace(/^data:image\/[a-zA-Z]+;base64,/, "") ?? "";
 }
 
-async function requestJson<T>({ method, url, headers = {}, body, config }: HttpRequestOptions): Promise<T> {
+async function requestJson<T>({ method, url, headers = {}, body, config, label }: HttpRequestOptions): Promise<T> {
   const parsed = new URL(url);
   const transport = parsed.protocol === "http:" ? httpRequest : httpsRequest;
 
@@ -78,6 +79,7 @@ async function requestJson<T>({ method, url, headers = {}, body, config }: HttpR
         path: `${parsed.pathname}${parsed.search}`,
         headers: {
           Accept: "application/json",
+          "User-Agent": "AgarraMais/1.0",
           ...headers,
         },
         ...(config?.certificatePem && config.privateKeyPem
@@ -93,7 +95,7 @@ async function requestJson<T>({ method, url, headers = {}, body, config }: HttpR
         response.on("end", () => {
           const raw = Buffer.concat(chunks).toString("utf8");
           if ((response.statusCode ?? 500) >= 400) {
-            reject(new Error(`Santander: falha HTTP ${response.statusCode} ${raw}`));
+            reject(new Error(`Santander ${label}: falha HTTP ${response.statusCode} ${raw}`));
             return;
           }
           if (!raw) {
@@ -138,6 +140,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
     const data = await requestJson<SantanderTokenResponse>({
       method: "POST",
       url: `${normalizeBaseUrl(config.baseUrl)}/auth/oauth/v2/token`,
+      label: "OAuth",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         client_id: config.clientId,
@@ -181,6 +184,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
       const data = await requestJson<SantanderChargeResponse>({
         method: "PUT",
         url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
+        label: "criacao de cobranca Pix",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -212,6 +216,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
       const data = await requestJson<SantanderChargeResponse>({
         method: "GET",
         url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
+        label: "consulta de cobranca Pix",
         headers: { Authorization: `Bearer ${token}` },
         config,
       });
