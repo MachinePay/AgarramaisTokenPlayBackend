@@ -22,6 +22,18 @@ const orderStatusQuerySchema = z.object({
   collection_id: z.union([z.string(), z.number()]).optional(),
 });
 
+const adminOrdersQuerySchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  status: z.enum(["PENDING_PAYMENT", "AWAITING_DELIVERY", "DELIVERED", "CANCELED", "FAILED"]).optional(),
+  paymentMethod: z.enum(["CREDITS", "POINTS", "MONEY"]).optional(),
+  productId: z.string().uuid().optional(),
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  minAmountBrl: z.coerce.number().nonnegative().optional(),
+  maxAmountBrl: z.coerce.number().nonnegative().optional(),
+  limit: z.coerce.number().int().positive().max(200).optional(),
+});
+
 export async function ordersRoutes(app: FastifyInstance) {
   app.post("/products/:id/checkout-credits", { onRequest: [app.authenticate] }, async (request, reply) => {
     const { id } = productParamsSchema.parse(request.params);
@@ -71,8 +83,9 @@ export async function ordersRoutes(app: FastifyInstance) {
   });
 
   // "Produtos a entregar": fila de pedidos pagos aguardando entrega fisica.
-  app.get("/admin/orders", { onRequest: [app.requireAdmin] }, async (_request, reply) => {
-    const orders = await listAdminOrders();
+  app.get("/admin/orders", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const query = adminOrdersQuerySchema.parse(request.query);
+    const orders = await listAdminOrders(query);
     return reply.status(200).send(orders);
   });
 

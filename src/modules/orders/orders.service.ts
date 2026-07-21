@@ -5,6 +5,30 @@ import { mercadoPagoGateway } from "../../integrations/mercadopago";
 
 type TransactionClient = Prisma.TransactionClient;
 
+export type AdminOrdersFilters = {
+  search?: string;
+  status?: ProductOrder["status"];
+  paymentMethod?: ProductOrder["paymentMethod"];
+  productId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  minAmountBrl?: number;
+  maxAmountBrl?: number;
+  limit?: number;
+};
+
+function parseAdminOrderDateRange(filters: AdminOrdersFilters) {
+  const now = new Date();
+  const defaultFrom = new Date(now);
+  defaultFrom.setDate(defaultFrom.getDate() - 6);
+  defaultFrom.setHours(0, 0, 0, 0);
+
+  const from = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000`) : defaultFrom;
+  const to = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999`) : now;
+
+  return { from, to };
+}
+
 async function getPurchasableProduct(productId: string) {
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product || !product.active) {
@@ -279,10 +303,37 @@ export async function getUserOrder(userId: string, orderId: string) {
   return order;
 }
 
-export async function listAdminOrders() {
+export async function listAdminOrders(filters: AdminOrdersFilters = {}) {
+  const { from, to } = parseAdminOrderDateRange(filters);
+  const search = filters.search?.trim();
+  const where: Prisma.ProductOrderWhereInput = {
+    createdAt: { gte: from, lte: to },
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.paymentMethod ? { paymentMethod: filters.paymentMethod } : {}),
+    ...(filters.productId ? { productId: filters.productId } : {}),
+    ...(filters.minAmountBrl !== undefined || filters.maxAmountBrl !== undefined
+      ? {
+          amountBrl: {
+            ...(filters.minAmountBrl !== undefined ? { gte: filters.minAmountBrl } : {}),
+            ...(filters.maxAmountBrl !== undefined ? { lte: filters.maxAmountBrl } : {}),
+          },
+        }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            { productName: { contains: search, mode: "insensitive" } },
+            { user: { name: { contains: search, mode: "insensitive" } } },
+            { user: { email: { contains: search, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+
   return prisma.productOrder.findMany({
+    where,
     orderBy: { createdAt: "desc" },
-    take: 200,
+    take: filters.limit ?? 100,
     include: {
       user: { select: { id: true, name: true, email: true } },
       product: { select: { id: true, name: true, imageUrl: true } },
