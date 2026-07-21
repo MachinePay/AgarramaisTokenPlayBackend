@@ -66,6 +66,29 @@ function stripDataImagePrefix(value: string | undefined): string {
   return value?.replace(/^data:image\/[a-zA-Z]+;base64,/, "") ?? "";
 }
 
+function buildCertificateOptions(config?: SantanderPaymentSettings) {
+  if (!config) return {};
+  if (config.pfxBase64) {
+    return {
+      pfx: Buffer.from(config.pfxBase64, "base64"),
+      ...(config.pfxPassphrase ? { passphrase: config.pfxPassphrase } : {}),
+    };
+  }
+  if (config.certificatePem && config.privateKeyPem) {
+    return {
+      cert: config.certificatePem,
+      key: config.privateKeyPem,
+    };
+  }
+  if (config.certificatePem && config.certificatePem.includes("PRIVATE KEY")) {
+    return {
+      cert: config.certificatePem,
+      key: config.certificatePem,
+    };
+  }
+  return {};
+}
+
 async function requestJson<T>({ method, url, headers = {}, body, config, label }: HttpRequestOptions): Promise<T> {
   const parsed = new URL(url);
   const transport = parsed.protocol === "http:" ? httpRequest : httpsRequest;
@@ -82,17 +105,7 @@ async function requestJson<T>({ method, url, headers = {}, body, config, label }
           "User-Agent": "AgarraMais/1.0",
           ...headers,
         },
-        ...(config?.certificatePem && config.privateKeyPem
-          ? {
-              cert: config.certificatePem,
-              key: config.privateKeyPem,
-            }
-          : config?.certificatePem && config.certificatePem.includes("PRIVATE KEY")
-            ? {
-                cert: config.certificatePem,
-                key: config.certificatePem,
-              }
-            : {}),
+        ...buildCertificateOptions(config),
       },
       (response) => {
         const chunks: Buffer[] = [];
@@ -130,9 +143,9 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
     if (!config.clientId || !config.clientSecret || !config.pixKey) {
       throw new BadRequestError("Configure Client ID, Client Secret e Chave Pix do Santander no setor financeiro");
     }
-    if (!config.certificatePem) {
+    if (!config.pfxBase64 && !config.certificatePem) {
       throw new BadRequestError(
-        "Configure o certificado digital do Santander no setor financeiro. O OAuth Santander exige o certificado cadastrado no portal.",
+        "Configure o certificado digital do Santander no setor financeiro. Envie um arquivo PFX/P12 ou PEM cadastrado no portal.",
       );
     }
     return config;

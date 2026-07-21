@@ -11,6 +11,8 @@ const SANTANDER_CLIENT_ID_KEY = "santander_client_id";
 const SANTANDER_CLIENT_SECRET_KEY = "santander_client_secret";
 const SANTANDER_CERTIFICATE_PEM_KEY = "santander_certificate_pem";
 const SANTANDER_PRIVATE_KEY_PEM_KEY = "santander_private_key_pem";
+const SANTANDER_PFX_BASE64_KEY = "santander_pfx_base64";
+const SANTANDER_PFX_PASSPHRASE_KEY = "santander_pfx_passphrase";
 const SANTANDER_PIX_KEY_KEY = "santander_pix_key";
 const DEFAULT_TOKEN_VALUE_BRL = "1.00";
 const DEFAULT_TOKEN_BUNDLE_AMOUNT_BRL = "1.00";
@@ -35,6 +37,7 @@ export type AdminSettings = {
   santanderClientSecretSet: boolean;
   santanderCertificatePemSet: boolean;
   santanderPrivateKeyPemSet: boolean;
+  santanderPfxSet: boolean;
   santanderPixKeySet: boolean;
 };
 
@@ -45,6 +48,8 @@ export type SantanderPaymentSettings = {
   clientSecret: string;
   certificatePem: string;
   privateKeyPem: string;
+  pfxBase64: string;
+  pfxPassphrase: string;
   pixKey: string;
 };
 
@@ -61,6 +66,8 @@ export async function getAdminSettings(): Promise<AdminSettings> {
     santanderClientSecret,
     santanderCertificatePem,
     santanderPrivateKeyPem,
+    santanderPfxBase64,
+    santanderPfxPassphrase,
     santanderPixKey,
   ] = await Promise.all([
     ensureSetting(TOKEN_BUNDLE_AMOUNT_KEY, DEFAULT_TOKEN_BUNDLE_AMOUNT_BRL),
@@ -74,6 +81,8 @@ export async function getAdminSettings(): Promise<AdminSettings> {
     ensureSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
     ensureSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
     ensureSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
+    ensureSetting(SANTANDER_PFX_BASE64_KEY, ""),
+    ensureSetting(SANTANDER_PFX_PASSPHRASE_KEY, ""),
     ensureSetting(SANTANDER_PIX_KEY_KEY, ""),
   ]);
 
@@ -95,6 +104,7 @@ export async function getAdminSettings(): Promise<AdminSettings> {
     santanderClientSecretSet: Boolean(santanderClientSecret.value),
     santanderCertificatePemSet: Boolean(santanderCertificatePem.value),
     santanderPrivateKeyPemSet: Boolean(santanderPrivateKeyPem.value),
+    santanderPfxSet: Boolean(santanderPfxBase64.value),
     santanderPixKeySet: Boolean(santanderPixKey.value),
   };
 }
@@ -107,6 +117,8 @@ export async function getSantanderPaymentSettings(): Promise<SantanderPaymentSet
     santanderClientSecret,
     santanderCertificatePem,
     santanderPrivateKeyPem,
+    santanderPfxBase64,
+    santanderPfxPassphrase,
     santanderPixKey,
   ] = await Promise.all([
     ensureSetting(SANTANDER_ENVIRONMENT_KEY, DEFAULT_SANTANDER_ENVIRONMENT),
@@ -115,6 +127,8 @@ export async function getSantanderPaymentSettings(): Promise<SantanderPaymentSet
     ensureSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
     ensureSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
     ensureSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
+    ensureSetting(SANTANDER_PFX_BASE64_KEY, ""),
+    ensureSetting(SANTANDER_PFX_PASSPHRASE_KEY, ""),
     ensureSetting(SANTANDER_PIX_KEY_KEY, ""),
   ]);
 
@@ -125,6 +139,8 @@ export async function getSantanderPaymentSettings(): Promise<SantanderPaymentSet
     clientSecret: santanderClientSecret.value,
     certificatePem: santanderCertificatePem.value,
     privateKeyPem: santanderPrivateKeyPem.value,
+    pfxBase64: santanderPfxBase64.value,
+    pfxPassphrase: santanderPfxPassphrase.value,
     pixKey: santanderPixKey.value,
   };
 }
@@ -141,6 +157,8 @@ export async function updateAdminSettings(input: {
   santanderClientSecret?: string;
   santanderCertificatePem?: string;
   santanderPrivateKeyPem?: string;
+  santanderPfxBase64?: string;
+  santanderPfxPassphrase?: string;
   santanderPixKey?: string;
 }): Promise<AdminSettings> {
   const current = await getAdminSettings();
@@ -166,6 +184,12 @@ export async function updateAdminSettings(input: {
       : []),
     ...(input.santanderPrivateKeyPem?.trim()
       ? [setSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, input.santanderPrivateKeyPem.trim())]
+      : []),
+    ...(input.santanderPfxBase64?.trim()
+      ? [setSetting(SANTANDER_PFX_BASE64_KEY, input.santanderPfxBase64.trim())]
+      : []),
+    ...(input.santanderPfxPassphrase !== undefined
+      ? [setSetting(SANTANDER_PFX_PASSPHRASE_KEY, input.santanderPfxPassphrase)]
       : []),
     ...(input.santanderPixKey?.trim() ? [setSetting(SANTANDER_PIX_KEY_KEY, input.santanderPixKey.trim())] : []),
   ]);

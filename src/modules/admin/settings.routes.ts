@@ -14,6 +14,8 @@ const settingsBodySchema = z.object({
   santanderClientSecret: z.string().optional(),
   santanderCertificatePem: z.string().optional(),
   santanderPrivateKeyPem: z.string().optional(),
+  santanderPfxBase64: z.string().optional(),
+  santanderPfxPassphrase: z.string().optional(),
   santanderPixKey: z.string().optional(),
 });
 
