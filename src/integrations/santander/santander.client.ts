@@ -1,7 +1,7 @@
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { URL } from "node:url";
-import { randomUUID } from "node:crypto";
+import { createSign, randomUUID } from "node:crypto";
 import { BadRequestError, HttpError } from "../../utils/http-error";
 import { getSantanderPaymentSettings, type SantanderPaymentSettings } from "../../modules/admin/settings.service";
 import type {
@@ -73,6 +73,30 @@ function normalizeSantanderStatus(status?: string): MercadoPagoPayment["status"]
 
 function stripDataImagePrefix(value: string | undefined): string {
   return value?.replace(/^data:image\/[a-zA-Z]+;base64,/, "") ?? "";
+}
+
+function base64Url(input: string): string {
+  return Buffer.from(input).toString("base64url");
+}
+
+function buildRs256Jwt(config: SantanderPaymentSettings): string | null {
+  const privateKey = config.privateKeyPem || (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "");
+  if (!privateKey) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: config.clientId,
+    sub: config.clientId,
+    aud: normalizeBaseUrl(config.pixBaseUrl),
+    iat: now,
+    nbf: now - 10,
+    exp: now + 300,
+    jti: randomUUID(),
+  };
+  const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
+  const signature = createSign("RSA-SHA256").update(signingInput).sign(privateKey, "base64url");
+  return `${signingInput}.${signature}`;
 }
 
 function buildCertificateOptions(config?: SantanderPaymentSettings) {
@@ -213,11 +237,13 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         infoAdicionais: [{ nome: "Referencia", valor: params.externalReference }],
       });
 
+      const pixJwt = buildRs256Jwt(config);
       const request = {
         url: buildPixChargeUrl(config, txid),
         label: "criacao de cobranca Pix",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${pixJwt ?? token}`,
+          ...(pixJwt ? { Token: pixJwt, "X-Authorization": `Bearer ${token}` } : {}),
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body).toString(),
         },
@@ -256,7 +282,9 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         method: "GET",
         url: buildPixChargeUrl(config, txid),
         label: "consulta de cobranca Pix",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${buildRs256Jwt(config) ?? token}`,
+        },
         config,
       });
 
