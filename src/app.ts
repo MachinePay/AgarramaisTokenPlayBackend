@@ -22,7 +22,24 @@ import { ordersRoutes } from "./modules/orders/orders.routes";
 export function buildApp() {
   const app = Fastify({ logger: true });
 
-  app.register(cors, { origin: true });
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    reply.header("Access-Control-Allow-Origin", origin || "*");
+    reply.header("Vary", "Origin");
+    reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    reply.header("Access-Control-Max-Age", "86400");
+
+    if (request.method === "OPTIONS") {
+      return reply.status(204).send();
+    }
+  });
+
+  app.register(cors, {
+    origin: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
   app.register(authPlugin);
 
   app.register(authRoutes);
