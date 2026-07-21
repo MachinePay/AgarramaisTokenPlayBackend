@@ -82,6 +82,11 @@ function base64Url(input: string): string {
 function buildRs256Jwt(config: SantanderPaymentSettings): string | null {
   const privateKey = config.privateKeyPem || (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "");
   if (!privateKey) return null;
+  if (!/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(privateKey)) {
+    throw new BadRequestError(
+      "A chave privada Santander precisa estar em formato PEM, com BEGIN PRIVATE KEY. Arquivo PFX/P12 sozinho nao assina JWT RS256.",
+    );
+  }
 
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
@@ -95,7 +100,19 @@ function buildRs256Jwt(config: SantanderPaymentSettings): string | null {
     jti: randomUUID(),
   };
   const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
-  const signature = createSign("RSA-SHA256").update(signingInput).sign(privateKey, "base64url");
+  let signature: string;
+  try {
+    signature = createSign("RSA-SHA256")
+      .update(signingInput)
+      .sign(
+        config.pfxPassphrase ? { key: privateKey, passphrase: config.pfxPassphrase } : privateKey,
+        "base64url",
+      );
+  } catch {
+    throw new BadRequestError(
+      "Nao foi possivel ler a chave privada Santander. Use uma chave PEM valida ou extraia a chave privada do PFX/P12.",
+    );
+  }
   return `${signingInput}.${signature}`;
 }
 
