@@ -20,6 +20,10 @@ const settingsBodySchema = z.object({
   santanderPixKey: z.string().optional(),
 });
 
+const paymentProviderBodySchema = z.object({
+  paymentProvider: z.enum(["MERCADO_PAGO", "SANTANDER"]),
+});
+
 export async function settingsAdminRoutes(app: FastifyInstance) {
   app.get("/settings/credits", async (_request, reply) => {
     const settings = await getAdminSettings();
@@ -33,6 +37,12 @@ export async function settingsAdminRoutes(app: FastifyInstance) {
 
   app.put("/admin/settings", { onRequest: [app.requireAdmin] }, async (request, reply) => {
     const body = settingsBodySchema.parse(request.body);
+    const settings = await updateAdminSettings(body);
+    return reply.status(200).send(settings);
+  });
+
+  app.put("/admin/settings/payment-provider", { onRequest: [app.requireAdmin] }, async (request, reply) => {
+    const body = paymentProviderBodySchema.parse(request.body);
     const settings = await updateAdminSettings(body);
     return reply.status(200).send(settings);
   });
