@@ -1,7 +1,8 @@
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { URL } from "node:url";
-import { randomUUID } from "node:crypto";
+import { createSign, randomUUID } from "node:crypto";
+import forge from "node-forge";
 import { BadRequestError, HttpError } from "../../utils/http-error";
 import { getSantanderPaymentSettings, type SantanderPaymentSettings } from "../../modules/admin/settings.service";
 import type {
@@ -73,6 +74,51 @@ function normalizeSantanderStatus(status?: string): MercadoPagoPayment["status"]
 
 function stripDataImagePrefix(value: string | undefined): string {
   return value?.replace(/^data:image\/[a-zA-Z]+;base64,/, "") ?? "";
+}
+
+function base64Url(input: string): string {
+  return Buffer.from(input).toString("base64url");
+}
+
+function extractPrivateKeyFromPfx(config: SantanderPaymentSettings): string {
+  if (!config.pfxBase64) return "";
+  try {
+    const pfxDer = forge.util.decode64(config.pfxBase64);
+    const pfxAsn1 = forge.asn1.fromDer(pfxDer);
+    const p12 = forge.pkcs12.pkcs12FromAsn1(pfxAsn1, false, config.pfxPassphrase || "");
+    const shroudedBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [];
+    const keyBags = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] ?? [];
+    const bags = [...shroudedBags, ...keyBags].filter(Boolean);
+    const key = bags.find((bag) => bag.key)?.key;
+    return key ? forge.pki.privateKeyToPem(key) : "";
+  } catch {
+    throw new BadRequestError("Nao foi possivel ler o PFX/P12 Santander. Verifique se a senha do arquivo esta correta.");
+  }
+}
+
+function buildClientAssertionJwt(config: SantanderPaymentSettings, tokenUrl: string): string | null {
+  const privateKey =
+    extractPrivateKeyFromPfx(config) ||
+    config.privateKeyPem ||
+    (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "") ||
+    "";
+  if (!privateKey) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: config.clientId,
+    sub: config.clientId,
+    aud: tokenUrl,
+    iat: now,
+    exp: now + 300,
+    jti: randomUUID(),
+  };
+  const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
+  const signature = createSign("RSA-SHA256")
+    .update(signingInput)
+    .sign(config.pfxPassphrase ? { key: privateKey, passphrase: config.pfxPassphrase } : privateKey, "base64url");
+  return `${signingInput}.${signature}`;
 }
 
 function buildCertificateOptions(config?: SantanderPaymentSettings) {
@@ -163,15 +209,24 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
   private async getAccessToken(config: SantanderPaymentSettings): Promise<string> {
     if (this.token && this.token.expiresAt > Date.now() + 30_000) return this.token.value;
 
+    const tokenUrl = `${normalizeBaseUrl(config.baseUrl)}/auth/oauth/v2/token`;
+    const clientAssertion = buildClientAssertionJwt(config, tokenUrl);
+
     const body = new URLSearchParams({
       client_id: config.clientId,
       client_secret: config.clientSecret,
       grant_type: "client_credentials",
+      ...(clientAssertion
+        ? {
+            client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+            client_assertion: clientAssertion,
+          }
+        : {}),
     }).toString();
 
     const data = await requestJson<SantanderTokenResponse>({
       method: "POST",
-      url: `${normalizeBaseUrl(config.baseUrl)}/auth/oauth/v2/token`,
+      url: tokenUrl,
       label: "OAuth",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
