@@ -63,18 +63,18 @@ export async function getAdminSettings(): Promise<AdminSettings> {
     santanderPrivateKeyPem,
     santanderPixKey,
   ] = await Promise.all([
-    upsertSetting(TOKEN_BUNDLE_AMOUNT_KEY, DEFAULT_TOKEN_BUNDLE_AMOUNT_BRL),
-    upsertSetting(TOKEN_BUNDLE_CREDITS_KEY, DEFAULT_TOKEN_BUNDLE_CREDITS),
-    upsertSetting(TOKEN_VALUE_KEY, DEFAULT_TOKEN_VALUE_BRL),
-    upsertSetting(POINTS_PER_CREDIT_KEY, DEFAULT_POINTS_PER_CREDIT),
-    upsertSetting(PAYMENT_PROVIDER_KEY, DEFAULT_PAYMENT_PROVIDER),
-    upsertSetting(SANTANDER_ENVIRONMENT_KEY, DEFAULT_SANTANDER_ENVIRONMENT),
-    upsertSetting(SANTANDER_BASE_URL_KEY, DEFAULT_SANTANDER_BASE_URL),
-    upsertSetting(SANTANDER_CLIENT_ID_KEY, ""),
-    upsertSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
-    upsertSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
-    upsertSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
-    upsertSetting(SANTANDER_PIX_KEY_KEY, ""),
+    ensureSetting(TOKEN_BUNDLE_AMOUNT_KEY, DEFAULT_TOKEN_BUNDLE_AMOUNT_BRL),
+    ensureSetting(TOKEN_BUNDLE_CREDITS_KEY, DEFAULT_TOKEN_BUNDLE_CREDITS),
+    ensureSetting(TOKEN_VALUE_KEY, DEFAULT_TOKEN_VALUE_BRL),
+    ensureSetting(POINTS_PER_CREDIT_KEY, DEFAULT_POINTS_PER_CREDIT),
+    ensureSetting(PAYMENT_PROVIDER_KEY, DEFAULT_PAYMENT_PROVIDER),
+    ensureSetting(SANTANDER_ENVIRONMENT_KEY, DEFAULT_SANTANDER_ENVIRONMENT),
+    ensureSetting(SANTANDER_BASE_URL_KEY, DEFAULT_SANTANDER_BASE_URL),
+    ensureSetting(SANTANDER_CLIENT_ID_KEY, ""),
+    ensureSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
+    ensureSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
+    ensureSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
+    ensureSetting(SANTANDER_PIX_KEY_KEY, ""),
   ]);
 
   const credits = Math.max(1, Number.parseInt(bundleCredits.value, 10) || 1);
@@ -109,13 +109,13 @@ export async function getSantanderPaymentSettings(): Promise<SantanderPaymentSet
     santanderPrivateKeyPem,
     santanderPixKey,
   ] = await Promise.all([
-    upsertSetting(SANTANDER_ENVIRONMENT_KEY, DEFAULT_SANTANDER_ENVIRONMENT),
-    upsertSetting(SANTANDER_BASE_URL_KEY, DEFAULT_SANTANDER_BASE_URL),
-    upsertSetting(SANTANDER_CLIENT_ID_KEY, ""),
-    upsertSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
-    upsertSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
-    upsertSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
-    upsertSetting(SANTANDER_PIX_KEY_KEY, ""),
+    ensureSetting(SANTANDER_ENVIRONMENT_KEY, DEFAULT_SANTANDER_ENVIRONMENT),
+    ensureSetting(SANTANDER_BASE_URL_KEY, DEFAULT_SANTANDER_BASE_URL),
+    ensureSetting(SANTANDER_CLIENT_ID_KEY, ""),
+    ensureSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
+    ensureSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
+    ensureSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
+    ensureSetting(SANTANDER_PIX_KEY_KEY, ""),
   ]);
 
   return {
@@ -150,30 +150,38 @@ export async function updateAdminSettings(input: {
   const pointsPerCredit = input.pointsPerCredit ?? current.pointsPerCredit;
 
   await Promise.all([
-    upsertSetting(TOKEN_BUNDLE_AMOUNT_KEY, amount.toFixed(2)),
-    upsertSetting(TOKEN_BUNDLE_CREDITS_KEY, String(credits)),
-    upsertSetting(TOKEN_VALUE_KEY, unitValue.toFixed(2)),
-    upsertSetting(POINTS_PER_CREDIT_KEY, String(pointsPerCredit)),
-    ...(input.paymentProvider ? [upsertSetting(PAYMENT_PROVIDER_KEY, input.paymentProvider)] : []),
-    ...(input.santanderEnvironment ? [upsertSetting(SANTANDER_ENVIRONMENT_KEY, input.santanderEnvironment)] : []),
-    ...(input.santanderBaseUrl !== undefined ? [upsertSetting(SANTANDER_BASE_URL_KEY, input.santanderBaseUrl.trim())] : []),
-    ...(input.santanderClientId?.trim() ? [upsertSetting(SANTANDER_CLIENT_ID_KEY, input.santanderClientId.trim())] : []),
+    setSetting(TOKEN_BUNDLE_AMOUNT_KEY, amount.toFixed(2)),
+    setSetting(TOKEN_BUNDLE_CREDITS_KEY, String(credits)),
+    setSetting(TOKEN_VALUE_KEY, unitValue.toFixed(2)),
+    setSetting(POINTS_PER_CREDIT_KEY, String(pointsPerCredit)),
+    ...(input.paymentProvider ? [setSetting(PAYMENT_PROVIDER_KEY, input.paymentProvider)] : []),
+    ...(input.santanderEnvironment ? [setSetting(SANTANDER_ENVIRONMENT_KEY, input.santanderEnvironment)] : []),
+    ...(input.santanderBaseUrl !== undefined ? [setSetting(SANTANDER_BASE_URL_KEY, input.santanderBaseUrl.trim())] : []),
+    ...(input.santanderClientId?.trim() ? [setSetting(SANTANDER_CLIENT_ID_KEY, input.santanderClientId.trim())] : []),
     ...(input.santanderClientSecret?.trim()
-      ? [upsertSetting(SANTANDER_CLIENT_SECRET_KEY, input.santanderClientSecret.trim())]
+      ? [setSetting(SANTANDER_CLIENT_SECRET_KEY, input.santanderClientSecret.trim())]
       : []),
     ...(input.santanderCertificatePem?.trim()
-      ? [upsertSetting(SANTANDER_CERTIFICATE_PEM_KEY, input.santanderCertificatePem.trim())]
+      ? [setSetting(SANTANDER_CERTIFICATE_PEM_KEY, input.santanderCertificatePem.trim())]
       : []),
     ...(input.santanderPrivateKeyPem?.trim()
-      ? [upsertSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, input.santanderPrivateKeyPem.trim())]
+      ? [setSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, input.santanderPrivateKeyPem.trim())]
       : []),
-    ...(input.santanderPixKey?.trim() ? [upsertSetting(SANTANDER_PIX_KEY_KEY, input.santanderPixKey.trim())] : []),
+    ...(input.santanderPixKey?.trim() ? [setSetting(SANTANDER_PIX_KEY_KEY, input.santanderPixKey.trim())] : []),
   ]);
 
   return getAdminSettings();
 }
 
-function upsertSetting(key: string, value: string) {
+function ensureSetting(key: string, value: string) {
+  return prisma.appSetting.upsert({
+    where: { key },
+    update: {},
+    create: { key, value },
+  });
+}
+
+function setSetting(key: string, value: string) {
   return prisma.appSetting.upsert({
     where: { key },
     update: { value },
