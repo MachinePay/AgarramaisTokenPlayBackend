@@ -2,7 +2,7 @@ import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { URL } from "node:url";
 import { randomUUID } from "node:crypto";
-import { BadRequestError } from "../../utils/http-error";
+import { BadRequestError, HttpError } from "../../utils/http-error";
 import { getSantanderPaymentSettings, type SantanderPaymentSettings } from "../../modules/admin/settings.service";
 import type {
   CreatePreferenceParams,
@@ -159,59 +159,73 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
     return data.access_token;
   }
 
+  private normalizeError(error: unknown, fallback: string): never {
+    if (error instanceof HttpError) throw error;
+    const message = error instanceof Error ? error.message : fallback;
+    throw new BadRequestError(message || fallback);
+  }
+
   async createPixPayment(params: CreatePixPaymentParams): Promise<CreatePixPaymentResult> {
-    const config = await this.getConfig();
-    const token = await this.getAccessToken(config);
-    const txid = buildTxId(params.externalReference);
-    const body = JSON.stringify({
-      calendario: { expiracao: 900 },
-      valor: { original: params.amountBrl.toFixed(2) },
-      chave: config.pixKey,
-      solicitacaoPagador: params.title.slice(0, 140),
-      infoAdicionais: [{ nome: "Referencia", valor: params.externalReference }],
-    });
+    try {
+      const config = await this.getConfig();
+      const token = await this.getAccessToken(config);
+      const txid = buildTxId(params.externalReference);
+      const body = JSON.stringify({
+        calendario: { expiracao: 900 },
+        valor: { original: params.amountBrl.toFixed(2) },
+        chave: config.pixKey,
+        solicitacaoPagador: params.title.slice(0, 140),
+        infoAdicionais: [{ nome: "Referencia", valor: params.externalReference }],
+      });
 
-    const data = await requestJson<SantanderChargeResponse>({
-      method: "PUT",
-      url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(body).toString(),
-      },
-      body,
-      config,
-    });
+      const data = await requestJson<SantanderChargeResponse>({
+        method: "PUT",
+        url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body).toString(),
+        },
+        body,
+        config,
+      });
 
-    const qrCode = data.pixCopiaECola ?? data.copiaECola ?? data.qrcode ?? data.qrCode;
-    if (!qrCode) {
-      throw new Error("Santander: cobranca criada sem Pix copia e cola");
+      const qrCode = data.pixCopiaECola ?? data.copiaECola ?? data.qrcode ?? data.qrCode;
+      if (!qrCode) {
+        throw new Error("Santander: cobranca criada sem Pix copia e cola");
+      }
+
+      return {
+        paymentId: data.txid ?? txid,
+        qrCode,
+        qrCodeBase64: stripDataImagePrefix(data.imagemQrcode ?? data.imagemQRCode ?? data.image ?? data.base64),
+      };
+    } catch (error) {
+      this.normalizeError(error, "Nao foi possivel gerar o Pix Santander");
     }
-
-    return {
-      paymentId: data.txid ?? txid,
-      qrCode,
-      qrCodeBase64: stripDataImagePrefix(data.imagemQrcode ?? data.imagemQRCode ?? data.image ?? data.base64),
-    };
   }
 
   async getPayment(txid: string): Promise<MercadoPagoPayment | null> {
-    const config = await this.getConfig();
-    const token = await this.getAccessToken(config);
-    const data = await requestJson<SantanderChargeResponse>({
-      method: "GET",
-      url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
-      headers: { Authorization: `Bearer ${token}` },
-      config,
-    });
+    try {
+      const config = await this.getConfig();
+      const token = await this.getAccessToken(config);
+      const data = await requestJson<SantanderChargeResponse>({
+        method: "GET",
+        url: `${normalizeBaseUrl(config.baseUrl)}/pix/v2/cob/${txid}`,
+        headers: { Authorization: `Bearer ${token}` },
+        config,
+      });
 
-    return {
-      id: data.txid ?? txid,
-      status: normalizeSantanderStatus(data.status),
-      statusDetail: data.status ?? null,
-      externalReference: txid.length === 32 ? txid.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5") : null,
-      transactionAmount: data.valor?.original ? Number(data.valor.original) : null,
-    };
+      return {
+        id: data.txid ?? txid,
+        status: normalizeSantanderStatus(data.status),
+        statusDetail: data.status ?? null,
+        externalReference: txid.length === 32 ? txid.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5") : null,
+        transactionAmount: data.valor?.original ? Number(data.valor.original) : null,
+      };
+    } catch (error) {
+      this.normalizeError(error, "Nao foi possivel consultar o Pix Santander");
+    }
   }
 
   async cancelPayment(_txid: string): Promise<void> {
