@@ -3,6 +3,7 @@ import { prisma } from "../../utils/prisma";
 import { BadRequestError, ConflictError, NotFoundError } from "../../utils/http-error";
 import { env } from "../../config/env";
 import { mercadoPagoGateway } from "../../integrations/mercadopago";
+import { cancelStoredPixPayment, getConfiguredPixGateway, getPaymentForStoredPixId } from "../../integrations/payments";
 import { getEffectivePackage } from "../campaigns/campaigns.service";
 import { getAdminSettings } from "../admin/settings.service";
 import { applyLevelUpBonuses, type LevelUpResult } from "../loyalty/loyalty.service";
@@ -102,7 +103,8 @@ export async function checkoutPackagePix(userId: string, packageId: string): Pro
     data: { userId, packageId, amountBrl, creditsAwarded, pointsAwarded },
   });
 
-  const pix = await mercadoPagoGateway.createPixPayment({
+  const pixGateway = await getConfiguredPixGateway();
+  const pix = await pixGateway.createPixPayment({
     title: `Agarra Mais - Pacote ${creditPackage.name}`,
     amountBrl,
     externalReference: transaction.id,
@@ -132,7 +134,8 @@ export async function checkoutCustomCreditsPix(userId: string, credits: number):
     data: { userId, amountBrl, creditsAwarded: credits, pointsAwarded },
   });
 
-  const pix = await mercadoPagoGateway.createPixPayment({
+  const pixGateway = await getConfiguredPixGateway();
+  const pix = await pixGateway.createPixPayment({
     title: `Agarra Mais - ${credits} ficha${credits > 1 ? "s" : ""}`,
     amountBrl,
     externalReference: transaction.id,
@@ -243,7 +246,7 @@ export async function failTransaction(transactionId: string): Promise<ConfirmTra
  * saber QUAL pagamento consultar.
  */
 export async function handleMercadoPagoPaymentUpdate(paymentId: string): Promise<void> {
-  const payment = await mercadoPagoGateway.getPayment(paymentId);
+  const payment = await getPaymentForStoredPixId(paymentId);
   if (!payment || !payment.externalReference) return;
 
   const transaction = await prisma.transaction.findUnique({
@@ -289,7 +292,7 @@ export async function syncUserTransactionFromMercadoPago(
     return transaction;
   }
 
-  const payment = await mercadoPagoGateway.getPayment(effectivePaymentId);
+  const payment = await getPaymentForStoredPixId(effectivePaymentId);
   if (!payment || payment.externalReference !== transaction.id) {
     return transaction;
   }
@@ -322,7 +325,7 @@ export async function cancelUserTransaction(userId: string, transactionId: strin
   }
 
   if (transaction.mpPaymentId) {
-    await mercadoPagoGateway.cancelPayment(transaction.mpPaymentId);
+    await cancelStoredPixPayment(transaction.mpPaymentId);
   }
 
   return prisma.transaction.update({
@@ -364,6 +367,9 @@ export async function getUserTransaction(userId: string, transactionId: string) 
   const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
   if (!transaction || transaction.userId !== userId) {
     throw new NotFoundError("Transacao nao encontrada");
+  }
+  if (transaction.status === "PENDING" && transaction.mpPaymentId) {
+    return syncUserTransactionFromMercadoPago(userId, transactionId, transaction.mpPaymentId);
   }
   return transaction;
 }

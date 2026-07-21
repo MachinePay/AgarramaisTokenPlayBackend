@@ -4,35 +4,128 @@ const TOKEN_VALUE_KEY = "token_value_brl";
 const TOKEN_BUNDLE_AMOUNT_KEY = "token_bundle_amount_brl";
 const TOKEN_BUNDLE_CREDITS_KEY = "token_bundle_credits";
 const POINTS_PER_CREDIT_KEY = "points_per_credit";
+const PAYMENT_PROVIDER_KEY = "payment_provider";
+const SANTANDER_ENVIRONMENT_KEY = "santander_environment";
+const SANTANDER_BASE_URL_KEY = "santander_base_url";
+const SANTANDER_CLIENT_ID_KEY = "santander_client_id";
+const SANTANDER_CLIENT_SECRET_KEY = "santander_client_secret";
+const SANTANDER_CERTIFICATE_PEM_KEY = "santander_certificate_pem";
+const SANTANDER_PRIVATE_KEY_PEM_KEY = "santander_private_key_pem";
+const SANTANDER_PIX_KEY_KEY = "santander_pix_key";
 const DEFAULT_TOKEN_VALUE_BRL = "1.00";
 const DEFAULT_TOKEN_BUNDLE_AMOUNT_BRL = "1.00";
 const DEFAULT_TOKEN_BUNDLE_CREDITS = "1";
 const DEFAULT_POINTS_PER_CREDIT = "0";
+const DEFAULT_PAYMENT_PROVIDER = "MERCADO_PAGO";
+const DEFAULT_SANTANDER_ENVIRONMENT = "SANDBOX";
+const DEFAULT_SANTANDER_BASE_URL = "https://trust-sandbox.api.santander.com.br";
+
+export type PaymentProvider = "MERCADO_PAGO" | "SANTANDER";
+export type SantanderEnvironment = "SANDBOX" | "PRODUCTION";
 
 export type AdminSettings = {
   tokenBundleAmountBrl: string;
   tokenBundleCredits: number;
   tokenValueBrl: string;
   pointsPerCredit: number;
+  paymentProvider: PaymentProvider;
+  santanderEnvironment: SantanderEnvironment;
+  santanderBaseUrl: string;
+  santanderClientIdSet: boolean;
+  santanderClientSecretSet: boolean;
+  santanderCertificatePemSet: boolean;
+  santanderPrivateKeyPemSet: boolean;
+  santanderPixKeySet: boolean;
+};
+
+export type SantanderPaymentSettings = {
+  environment: SantanderEnvironment;
+  baseUrl: string;
+  clientId: string;
+  clientSecret: string;
+  certificatePem: string;
+  privateKeyPem: string;
+  pixKey: string;
 };
 
 export async function getAdminSettings(): Promise<AdminSettings> {
-  const [bundleAmount, bundleCredits, legacyTokenValue, pointsPerCredit] = await Promise.all([
+  const [
+    bundleAmount,
+    bundleCredits,
+    legacyTokenValue,
+    pointsPerCredit,
+    paymentProvider,
+    santanderEnvironment,
+    santanderBaseUrl,
+    santanderClientId,
+    santanderClientSecret,
+    santanderCertificatePem,
+    santanderPrivateKeyPem,
+    santanderPixKey,
+  ] = await Promise.all([
     upsertSetting(TOKEN_BUNDLE_AMOUNT_KEY, DEFAULT_TOKEN_BUNDLE_AMOUNT_BRL),
     upsertSetting(TOKEN_BUNDLE_CREDITS_KEY, DEFAULT_TOKEN_BUNDLE_CREDITS),
     upsertSetting(TOKEN_VALUE_KEY, DEFAULT_TOKEN_VALUE_BRL),
     upsertSetting(POINTS_PER_CREDIT_KEY, DEFAULT_POINTS_PER_CREDIT),
+    upsertSetting(PAYMENT_PROVIDER_KEY, DEFAULT_PAYMENT_PROVIDER),
+    upsertSetting(SANTANDER_ENVIRONMENT_KEY, DEFAULT_SANTANDER_ENVIRONMENT),
+    upsertSetting(SANTANDER_BASE_URL_KEY, DEFAULT_SANTANDER_BASE_URL),
+    upsertSetting(SANTANDER_CLIENT_ID_KEY, ""),
+    upsertSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
+    upsertSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
+    upsertSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
+    upsertSetting(SANTANDER_PIX_KEY_KEY, ""),
   ]);
 
   const credits = Math.max(1, Number.parseInt(bundleCredits.value, 10) || 1);
   const amount = Number(bundleAmount.value || legacyTokenValue.value || DEFAULT_TOKEN_VALUE_BRL);
   const unitValue = amount / credits;
+  const provider = paymentProvider.value === "SANTANDER" ? "SANTANDER" : "MERCADO_PAGO";
+  const environment = santanderEnvironment.value === "PRODUCTION" ? "PRODUCTION" : "SANDBOX";
 
   return {
     tokenBundleAmountBrl: amount.toFixed(2),
     tokenBundleCredits: credits,
     tokenValueBrl: unitValue.toFixed(2),
     pointsPerCredit: Number(pointsPerCredit.value) || 0,
+    paymentProvider: provider,
+    santanderEnvironment: environment,
+    santanderBaseUrl: santanderBaseUrl.value || DEFAULT_SANTANDER_BASE_URL,
+    santanderClientIdSet: Boolean(santanderClientId.value),
+    santanderClientSecretSet: Boolean(santanderClientSecret.value),
+    santanderCertificatePemSet: Boolean(santanderCertificatePem.value),
+    santanderPrivateKeyPemSet: Boolean(santanderPrivateKeyPem.value),
+    santanderPixKeySet: Boolean(santanderPixKey.value),
+  };
+}
+
+export async function getSantanderPaymentSettings(): Promise<SantanderPaymentSettings> {
+  const [
+    santanderEnvironment,
+    santanderBaseUrl,
+    santanderClientId,
+    santanderClientSecret,
+    santanderCertificatePem,
+    santanderPrivateKeyPem,
+    santanderPixKey,
+  ] = await Promise.all([
+    upsertSetting(SANTANDER_ENVIRONMENT_KEY, DEFAULT_SANTANDER_ENVIRONMENT),
+    upsertSetting(SANTANDER_BASE_URL_KEY, DEFAULT_SANTANDER_BASE_URL),
+    upsertSetting(SANTANDER_CLIENT_ID_KEY, ""),
+    upsertSetting(SANTANDER_CLIENT_SECRET_KEY, ""),
+    upsertSetting(SANTANDER_CERTIFICATE_PEM_KEY, ""),
+    upsertSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, ""),
+    upsertSetting(SANTANDER_PIX_KEY_KEY, ""),
+  ]);
+
+  return {
+    environment: santanderEnvironment.value === "PRODUCTION" ? "PRODUCTION" : "SANDBOX",
+    baseUrl: santanderBaseUrl.value || DEFAULT_SANTANDER_BASE_URL,
+    clientId: santanderClientId.value,
+    clientSecret: santanderClientSecret.value,
+    certificatePem: santanderCertificatePem.value,
+    privateKeyPem: santanderPrivateKeyPem.value,
+    pixKey: santanderPixKey.value,
   };
 }
 
@@ -41,11 +134,19 @@ export async function updateAdminSettings(input: {
   tokenBundleCredits?: number;
   tokenValueBrl?: number;
   pointsPerCredit?: number;
+  paymentProvider?: PaymentProvider;
+  santanderEnvironment?: SantanderEnvironment;
+  santanderBaseUrl?: string;
+  santanderClientId?: string;
+  santanderClientSecret?: string;
+  santanderCertificatePem?: string;
+  santanderPrivateKeyPem?: string;
+  santanderPixKey?: string;
 }): Promise<AdminSettings> {
-  const amount = input.tokenBundleAmountBrl ?? input.tokenValueBrl ?? Number(DEFAULT_TOKEN_BUNDLE_AMOUNT_BRL);
-  const credits = input.tokenBundleCredits ?? 1;
-  const unitValue = amount / credits;
   const current = await getAdminSettings();
+  const amount = input.tokenBundleAmountBrl ?? input.tokenValueBrl ?? Number(current.tokenBundleAmountBrl);
+  const credits = input.tokenBundleCredits ?? current.tokenBundleCredits;
+  const unitValue = amount / credits;
   const pointsPerCredit = input.pointsPerCredit ?? current.pointsPerCredit;
 
   await Promise.all([
@@ -53,6 +154,20 @@ export async function updateAdminSettings(input: {
     upsertSetting(TOKEN_BUNDLE_CREDITS_KEY, String(credits)),
     upsertSetting(TOKEN_VALUE_KEY, unitValue.toFixed(2)),
     upsertSetting(POINTS_PER_CREDIT_KEY, String(pointsPerCredit)),
+    ...(input.paymentProvider ? [upsertSetting(PAYMENT_PROVIDER_KEY, input.paymentProvider)] : []),
+    ...(input.santanderEnvironment ? [upsertSetting(SANTANDER_ENVIRONMENT_KEY, input.santanderEnvironment)] : []),
+    ...(input.santanderBaseUrl !== undefined ? [upsertSetting(SANTANDER_BASE_URL_KEY, input.santanderBaseUrl.trim())] : []),
+    ...(input.santanderClientId?.trim() ? [upsertSetting(SANTANDER_CLIENT_ID_KEY, input.santanderClientId.trim())] : []),
+    ...(input.santanderClientSecret?.trim()
+      ? [upsertSetting(SANTANDER_CLIENT_SECRET_KEY, input.santanderClientSecret.trim())]
+      : []),
+    ...(input.santanderCertificatePem?.trim()
+      ? [upsertSetting(SANTANDER_CERTIFICATE_PEM_KEY, input.santanderCertificatePem.trim())]
+      : []),
+    ...(input.santanderPrivateKeyPem?.trim()
+      ? [upsertSetting(SANTANDER_PRIVATE_KEY_PEM_KEY, input.santanderPrivateKeyPem.trim())]
+      : []),
+    ...(input.santanderPixKey?.trim() ? [upsertSetting(SANTANDER_PIX_KEY_KEY, input.santanderPixKey.trim())] : []),
   ]);
 
   return getAdminSettings();

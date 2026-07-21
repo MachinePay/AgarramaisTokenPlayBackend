@@ -7,6 +7,14 @@ const settingsBodySchema = z.object({
   tokenBundleCredits: z.number().int().positive().optional(),
   tokenValueBrl: z.number().positive().optional(),
   pointsPerCredit: z.number().nonnegative().optional(),
+  paymentProvider: z.enum(["MERCADO_PAGO", "SANTANDER"]).optional(),
+  santanderEnvironment: z.enum(["SANDBOX", "PRODUCTION"]).optional(),
+  santanderBaseUrl: z.string().url().optional(),
+  santanderClientId: z.string().optional(),
+  santanderClientSecret: z.string().optional(),
+  santanderCertificatePem: z.string().optional(),
+  santanderPrivateKeyPem: z.string().optional(),
+  santanderPixKey: z.string().optional(),
 });
 
 export async function settingsAdminRoutes(app: FastifyInstance) {

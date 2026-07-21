@@ -2,6 +2,7 @@ import type { Prisma, ProductOrder } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
 import { BadRequestError, ConflictError, NotFoundError } from "../../utils/http-error";
 import { mercadoPagoGateway } from "../../integrations/mercadopago";
+import { cancelStoredPixPayment, getConfiguredPixGateway, getPaymentForStoredPixId } from "../../integrations/payments";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -172,7 +173,8 @@ export async function checkoutProductWithMoneyPix(userId: string, productId: str
     },
   });
 
-  const pix = await mercadoPagoGateway.createPixPayment({
+  const pixGateway = await getConfiguredPixGateway();
+  const pix = await pixGateway.createPixPayment({
     title: `Agarra Mais - ${product.name}`,
     amountBrl,
     externalReference: order.id,
@@ -201,7 +203,7 @@ async function approveOrderPayment(
 
 /** Espelha handleMercadoPagoPaymentUpdate do modulo transactions, mas para pedidos de produto pagos em dinheiro. */
 export async function handleMercadoPagoPaymentUpdateForOrders(paymentId: string): Promise<void> {
-  const payment = await mercadoPagoGateway.getPayment(paymentId);
+  const payment = await getPaymentForStoredPixId(paymentId);
   if (!payment || !payment.externalReference) return;
 
   const order = await prisma.productOrder.findUnique({ where: { id: payment.externalReference } });
@@ -245,7 +247,7 @@ export async function syncUserOrderFromMercadoPago(
     return order;
   }
 
-  const payment = await mercadoPagoGateway.getPayment(effectivePaymentId);
+  const payment = await getPaymentForStoredPixId(effectivePaymentId);
   if (!payment || payment.externalReference !== order.id) {
     return order;
   }
@@ -278,7 +280,7 @@ export async function cancelUserOrder(userId: string, orderId: string): Promise<
   }
 
   if (order.mpPaymentId) {
-    await mercadoPagoGateway.cancelPayment(order.mpPaymentId);
+    await cancelStoredPixPayment(order.mpPaymentId);
   }
 
   return prisma.productOrder.update({
@@ -299,6 +301,9 @@ export async function getUserOrder(userId: string, orderId: string) {
   const order = await prisma.productOrder.findUnique({ where: { id: orderId } });
   if (!order || order.userId !== userId) {
     throw new NotFoundError("Pedido nao encontrado");
+  }
+  if (order.status === "PENDING_PAYMENT" && order.mpPaymentId) {
+    return syncUserOrderFromMercadoPago(userId, orderId, order.mpPaymentId);
   }
   return order;
 }
@@ -368,7 +373,7 @@ export async function cancelOrderAsAdmin(orderId: string) {
   }
 
   if (order.status === "PENDING_PAYMENT" && order.mpPaymentId) {
-    await mercadoPagoGateway.cancelPayment(order.mpPaymentId);
+    await cancelStoredPixPayment(order.mpPaymentId);
   }
 
   return prisma.$transaction(async (tx) => {
