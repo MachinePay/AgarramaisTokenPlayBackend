@@ -98,13 +98,14 @@ function extractPrivateKeyFromPfx(config: SantanderPaymentSettings): string {
 
 function buildRs256Jwt(config: SantanderPaymentSettings): string | null {
   const privateKey =
+    extractPrivateKeyFromPfx(config) ||
     config.privateKeyPem ||
     (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "") ||
-    extractPrivateKeyFromPfx(config);
+    "";
   if (!privateKey) return null;
   if (!/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(privateKey)) {
     throw new BadRequestError(
-      "A chave privada Santander precisa estar em formato PEM, com BEGIN PRIVATE KEY. Arquivo PFX/P12 sozinho nao assina JWT RS256.",
+      "A chave privada Santander salva nao esta em formato PEM valido. Se voce enviou o PFX/P12 original, salve o financeiro novamente com a senha correta.",
     );
   }
 
