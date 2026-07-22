@@ -1,8 +1,7 @@
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { URL } from "node:url";
-import { createSign, randomUUID } from "node:crypto";
-import forge from "node-forge";
+import { randomUUID } from "node:crypto";
 import { BadRequestError, HttpError } from "../../utils/http-error";
 import { getSantanderPaymentSettings, type SantanderPaymentSettings } from "../../modules/admin/settings.service";
 import type {
@@ -52,6 +51,12 @@ function buildPixChargeUrl(config: SantanderPaymentSettings, txid: string): stri
   return `${normalizeBaseUrl(config.pixBaseUrl)}/cob/${txid}`;
 }
 
+function buildPixTokenUrl(config: SantanderPaymentSettings): string {
+  const origin = new URL(config.pixBaseUrl).origin;
+  const path = config.environment === "PRODUCTION" ? "/oauth/token" : "/sandbox/oauth/token";
+  return `${origin}${path}?grant_type=client_credentials`;
+}
+
 function isUnsupportedMethodError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : "";
   return message.includes("Unsupported Request") || message.includes("not supported");
@@ -74,72 +79,6 @@ function normalizeSantanderStatus(status?: string): MercadoPagoPayment["status"]
 
 function stripDataImagePrefix(value: string | undefined): string {
   return value?.replace(/^data:image\/[a-zA-Z]+;base64,/, "") ?? "";
-}
-
-function base64Url(input: string): string {
-  return Buffer.from(input).toString("base64url");
-}
-
-function extractPrivateKeyFromPfx(config: SantanderPaymentSettings): string {
-  if (!config.pfxBase64) return "";
-  try {
-    const pfxDer = forge.util.decode64(config.pfxBase64);
-    const pfxAsn1 = forge.asn1.fromDer(pfxDer);
-    const p12 = forge.pkcs12.pkcs12FromAsn1(pfxAsn1, false, config.pfxPassphrase || "");
-    const shroudedBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [];
-    const keyBags = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] ?? [];
-    const bags = [...shroudedBags, ...keyBags].filter(Boolean);
-    const key = bags.find((bag) => bag.key)?.key;
-    return key ? forge.pki.privateKeyToPem(key) : "";
-  } catch {
-    throw new BadRequestError("Nao foi possivel ler o PFX/P12 Santander. Verifique se a senha do arquivo esta correta.");
-  }
-}
-
-function resolvePrivateKeyPem(config: SantanderPaymentSettings): string {
-  return (
-    extractPrivateKeyFromPfx(config) ||
-    config.privateKeyPem ||
-    (config.certificatePem.includes("PRIVATE KEY") ? config.certificatePem : "") ||
-    ""
-  );
-}
-
-function signRs256Jwt(config: SantanderPaymentSettings, claims: Record<string, unknown>): string | null {
-  const privateKey = resolvePrivateKeyPem(config);
-  if (!privateKey) return null;
-
-  const header = { alg: "RS256", typ: "JWT" };
-  const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(claims))}`;
-  const signature = createSign("RSA-SHA256")
-    .update(signingInput)
-    .sign(config.pfxPassphrase ? { key: privateKey, passphrase: config.pfxPassphrase } : privateKey, "base64url");
-  return `${signingInput}.${signature}`;
-}
-
-function buildClientAssertionJwt(config: SantanderPaymentSettings, tokenUrl: string): string | null {
-  const now = Math.floor(Date.now() / 1000);
-  return signRs256Jwt(config, {
-    iss: config.clientId,
-    sub: config.clientId,
-    aud: tokenUrl,
-    iat: now,
-    exp: now + 300,
-    jti: randomUUID(),
-  });
-}
-
-function buildPixTokenHeaderJwt(config: SantanderPaymentSettings): string | null {
-  const now = Math.floor(Date.now() / 1000);
-  return signRs256Jwt(config, {
-    iss: config.clientId,
-    sub: config.clientId,
-    aud: normalizeBaseUrl(config.pixBaseUrl),
-    iat: now,
-    nbf: now - 10,
-    exp: now + 300,
-    jti: randomUUID(),
-  });
 }
 
 function buildCertificateOptions(config?: SantanderPaymentSettings) {
@@ -230,29 +169,17 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
   private async getAccessToken(config: SantanderPaymentSettings): Promise<string> {
     if (this.token && this.token.expiresAt > Date.now() + 30_000) return this.token.value;
 
-    const tokenUrl = `${normalizeBaseUrl(config.baseUrl)}/auth/oauth/v2/token`;
-    const clientAssertion = buildClientAssertionJwt(config, tokenUrl);
-
     const body = new URLSearchParams({
       client_id: config.clientId,
       client_secret: config.clientSecret,
-      grant_type: "client_credentials",
-      ...(clientAssertion
-        ? {
-            client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-            client_assertion: clientAssertion,
-          }
-        : {}),
     }).toString();
 
     const data = await requestJson<SantanderTokenResponse>({
       method: "POST",
-      url: tokenUrl,
+      url: buildPixTokenUrl(config),
       label: "OAuth",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
         "Content-Length": Buffer.byteLength(body).toString(),
       },
       body,
@@ -289,13 +216,11 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         infoAdicionais: [{ nome: "Referencia", valor: params.externalReference }],
       });
 
-      const pixTokenJwt = buildPixTokenHeaderJwt(config);
       const chargeRequest = {
         url: buildPixChargeUrl(config, txid),
         label: "criacao de cobranca Pix",
         headers: {
           Authorization: `Bearer ${token}`,
-          ...(pixTokenJwt ? { Token: pixTokenJwt } : {}),
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body).toString(),
         },
@@ -330,14 +255,12 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
     try {
       const config = await this.getConfig();
       const token = await this.getAccessToken(config);
-      const pixTokenJwt = buildPixTokenHeaderJwt(config);
       const data = await requestJson<SantanderChargeResponse>({
         method: "GET",
         url: buildPixChargeUrl(config, txid),
         label: "consulta de cobranca Pix",
         headers: {
           Authorization: `Bearer ${token}`,
-          ...(pixTokenJwt ? { Token: pixTokenJwt } : {}),
         },
         config,
       });
