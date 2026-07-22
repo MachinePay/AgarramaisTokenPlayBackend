@@ -22,6 +22,7 @@ type SantanderTokenResponse = {
 type SantanderChargeResponse = {
   txid?: string;
   status?: string;
+  location?: string;
   pixCopiaECola?: string;
   copiaECola?: string;
   qrcode?: string;
@@ -238,7 +239,7 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
 
       const qrCode = data.pixCopiaECola ?? data.copiaECola ?? data.qrcode ?? data.qrCode;
       if (!qrCode) {
-        throw new Error("Santander: cobranca criada sem Pix copia e cola");
+        throw new Error(`Santander: cobranca criada sem Pix copia e cola. Resposta: ${JSON.stringify(data)}`);
       }
 
       return {
