@@ -82,6 +82,10 @@ function stripDataImagePrefix(value: string | undefined): string {
   return value?.replace(/^data:image\/[a-zA-Z]+;base64,/, "") ?? "";
 }
 
+function extractQrCode(data: SantanderChargeResponse): string | undefined {
+  return data.pixCopiaECola ?? data.copiaECola ?? data.qrcode ?? data.qrCode;
+}
+
 function buildCertificateOptions(config?: SantanderPaymentSettings) {
   if (!config) return {};
   if (config.pfxBase64) {
@@ -237,15 +241,26 @@ export class SantanderPixGateway implements IMercadoPagoGateway {
         data = await requestJson<SantanderChargeResponse>({ ...chargeRequest, method: "POST" });
       }
 
-      const qrCode = data.pixCopiaECola ?? data.copiaECola ?? data.qrcode ?? data.qrCode;
+      let qrSource = data;
+      if (!extractQrCode(qrSource) && data.location) {
+        qrSource = await requestJson<SantanderChargeResponse>({
+          method: "GET",
+          url: data.location.startsWith("http") ? data.location : `https://${data.location}`,
+          label: "consulta do location Pix",
+          headers: { Authorization: `Bearer ${token}` },
+          config,
+        });
+      }
+
+      const qrCode = extractQrCode(qrSource);
       if (!qrCode) {
-        throw new Error(`Santander: cobranca criada sem Pix copia e cola. Resposta: ${JSON.stringify(data)}`);
+        throw new Error(`Santander: cobranca criada sem Pix copia e cola. Resposta: ${JSON.stringify(qrSource)}`);
       }
 
       return {
         paymentId: data.txid ?? txid,
         qrCode,
-        qrCodeBase64: stripDataImagePrefix(data.imagemQrcode ?? data.imagemQRCode ?? data.image ?? data.base64),
+        qrCodeBase64: stripDataImagePrefix(qrSource.imagemQrcode ?? qrSource.imagemQRCode ?? qrSource.image ?? qrSource.base64),
       };
     } catch (error) {
       this.normalizeError(error, "Nao foi possivel gerar o Pix Santander");
